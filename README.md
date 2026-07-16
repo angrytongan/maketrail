@@ -14,4 +14,4 @@ npm run lint        # lint
 npm run typecheck   # type-check
 ```
 
-Currently a spike: mock survey points → local meters → triangulated mesh → rendered in Three.js, plus a parametric roller obstacle overlaid on it with live-updating controls (length/height/width/position/rotation). No 2D editor, drag-and-drop placement, or trail marking yet — see [CLAUDE.md](CLAUDE.md) for status.
+Currently a spike: mock survey points → local meters → triangulated mesh → rendered in Three.js, plus a parametric roller obstacle overlaid on it with live-updating controls (length/height/width/position/rotation). The UI is split into cards — a 2D plan view (static top-down projection for now) and a 3D view, both showing the same scene. No drag-and-drop placement, no trail marking, no real import yet — see [CLAUDE.md](CLAUDE.md) for status.

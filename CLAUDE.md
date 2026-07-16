@@ -31,4 +31,6 @@ Terrain spike (`src/terrain/`) — imports mock lat/lon/height points, converts 
 
 Roller obstacle (`src/obstacles/roller.ts`) — parametric sine-wave mesh (single hump, per the module's own comment on why it deviates from research/rollers.md's full-period formula), overlaid on the terrain as a separate object. `index.html`/`main.ts` wire up plain HTML range-input controls (length, height, position, rotation) that rebuild the geometry and update the mesh transform live, proving the parametric-obstacle + live-3D pipeline from docs/decisions.md.
 
-No 2D top-down editor, no drag-and-drop placement, no trail marking, no real import yet — next step is likely the 2D editor (terrain vertex editing + obstacle placement UI) or extending the obstacle set to berms/kickers, per docs/decisions.md.
+UI is now split into cards (`index.html`): a "2D Plan View" card and a "3D View" card side by side, plus a controls card below. Both views render the *same* Three.js `scene` — 3D uses the existing `PerspectiveCamera` + `OrbitControls`, 2D uses a static top-down `OrthographicCamera` (no pan/zoom yet). The 2D card is currently just a top-down projection of the 3D scene, not the real interactive 2D editor — that (vertex editing, drag-drop obstacle placement, trail waypoints) is still a separate future feature per docs/decisions.md.
+
+No drag-and-drop placement, no trail marking, no real import, no 2D-specific interactions yet — next step is likely building real interactivity into the 2D view or extending the obstacle set to berms/kickers.

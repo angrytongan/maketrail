@@ -4,6 +4,7 @@ import {
   GridHelper,
   Mesh,
   MeshLambertMaterial,
+  OrthographicCamera,
   PerspectiveCamera,
   Scene,
   WebGLRenderer,
@@ -103,25 +104,61 @@ const sun = new DirectionalLight(0xffffff, 1.2);
 sun.position.set(10, 15, 5);
 scene.add(sun);
 
-const camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(15, 12, 15);
+const view3dBody = document.querySelector<HTMLDivElement>("#view-3d-body")!;
+const view2dBody = document.querySelector<HTMLDivElement>("#view-2d-body")!;
 
-const renderer = new WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+// 3D perspective view, orbit-controllable.
+const camera3d = new PerspectiveCamera(60, 1, 0.1, 1000);
+camera3d.position.set(15, 12, 15);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+const renderer3d = new WebGLRenderer({ antialias: true });
+view3dBody.appendChild(renderer3d.domElement);
+
+const controls = new OrbitControls(camera3d, renderer3d.domElement);
 controls.target.set(0, 0, 0);
 
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+// 2D top-down view: an orthographic camera looking straight down at the same
+// scene. Static for now — a preview of the card layout, not the real
+// interactive 2D editor (vertex editing, obstacle placement) planned in
+// docs/decisions.md.
+const PLAN_VIEW_EXTENT = 12;
+const camera2d = new OrthographicCamera(-PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, -PLAN_VIEW_EXTENT, 0.1, 100);
+camera2d.position.set(0, 50, 0);
+camera2d.up.set(0, 0, -1);
+camera2d.lookAt(0, 0, 0);
+
+const renderer2d = new WebGLRenderer({ antialias: true });
+view2dBody.appendChild(renderer2d.domElement);
+
+function resizeToContainer(renderer: WebGLRenderer, container: HTMLDivElement, camera: PerspectiveCamera | OrthographicCamera): void {
+  const { clientWidth: width, clientHeight: height } = container;
+  if (width === 0 || height === 0) return;
+
+  renderer.setSize(width, height);
+  if (camera instanceof PerspectiveCamera) {
+    camera.aspect = width / height;
+  } else {
+    const halfHeight = PLAN_VIEW_EXTENT;
+    const halfWidth = halfHeight * (width / height);
+    camera.left = -halfWidth;
+    camera.right = halfWidth;
+    camera.top = halfHeight;
+    camera.bottom = -halfHeight;
+  }
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+const resizeObserver = new ResizeObserver(() => {
+  resizeToContainer(renderer3d, view3dBody, camera3d);
+  resizeToContainer(renderer2d, view2dBody, camera2d);
 });
+resizeObserver.observe(view3dBody);
+resizeObserver.observe(view2dBody);
 
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  renderer.render(scene, camera);
+  renderer3d.render(scene, camera3d);
+  renderer2d.render(scene, camera2d);
 }
 animate();
