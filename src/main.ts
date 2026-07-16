@@ -13,6 +13,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { toLocal, type GeoPoint } from "./terrain/coords";
 import { buildTerrainGeometry } from "./terrain/mesh";
 import { buildRollerGeometry } from "./obstacles/roller";
+import { buildBermGeometry } from "./obstacles/berm";
 
 // Mock survey data: a scattered, irregularly-spaced set of points forming a
 // gentle bump, standing in for a real GPS/lat-lon-height import.
@@ -101,6 +102,65 @@ for (const input of [lengthInput, heightInput, widthInput, periodsInput, posXInp
   input.addEventListener("input", updateRoller);
 }
 updateRoller();
+
+// Berm obstacle: same "separate object overlaid on terrain, centered on its
+// own local origin" convention as the roller (see buildBermGeometry).
+const bermMaterial = new MeshLambertMaterial({ color: 0x8a6bb0 });
+const berm = new Mesh(buildBermGeometry({ radius: 4, sweepAngle: 90, bankAngle: 35, width: 2 }), bermMaterial);
+scene.add(berm);
+
+function updateBerm(): void {
+  const radius = Number(bermRadiusInput.value);
+  const sweepAngle = Number(bermSweepInput.value);
+  const bankAngle = Number(bermBankInput.value);
+  const width = Number(bermWidthInput.value);
+
+  berm.geometry.dispose();
+  berm.geometry = buildBermGeometry({ radius, sweepAngle, bankAngle, width });
+
+  berm.position.set(Number(bermPosXInput.value), Number(bermElevationInput.value), Number(bermPosZInput.value));
+  berm.rotation.y = (Number(bermRotationInput.value) * Math.PI) / 180;
+
+  bermRadiusValue.textContent = `${radius.toFixed(1)}m`;
+  bermSweepValue.textContent = `${sweepAngle}°`;
+  bermBankValue.textContent = `${bankAngle}°`;
+  bermWidthValue.textContent = `${width.toFixed(1)}m`;
+  bermPosXValue.textContent = `${Number(bermPosXInput.value).toFixed(1)}m`;
+  bermPosZValue.textContent = `${Number(bermPosZInput.value).toFixed(1)}m`;
+  bermElevationValue.textContent = `${Number(bermElevationInput.value).toFixed(1)}m`;
+  bermRotationValue.textContent = `${bermRotationInput.value}°`;
+}
+
+const bermRadiusInput = document.querySelector<HTMLInputElement>("#berm-radius")!;
+const bermSweepInput = document.querySelector<HTMLInputElement>("#berm-sweep")!;
+const bermBankInput = document.querySelector<HTMLInputElement>("#berm-bank")!;
+const bermWidthInput = document.querySelector<HTMLInputElement>("#berm-width")!;
+const bermPosXInput = document.querySelector<HTMLInputElement>("#berm-pos-x")!;
+const bermPosZInput = document.querySelector<HTMLInputElement>("#berm-pos-z")!;
+const bermElevationInput = document.querySelector<HTMLInputElement>("#berm-elevation")!;
+const bermRotationInput = document.querySelector<HTMLInputElement>("#berm-rotation")!;
+const bermRadiusValue = document.querySelector<HTMLSpanElement>("#berm-radius-value")!;
+const bermSweepValue = document.querySelector<HTMLSpanElement>("#berm-sweep-value")!;
+const bermBankValue = document.querySelector<HTMLSpanElement>("#berm-bank-value")!;
+const bermWidthValue = document.querySelector<HTMLSpanElement>("#berm-width-value")!;
+const bermPosXValue = document.querySelector<HTMLSpanElement>("#berm-pos-x-value")!;
+const bermPosZValue = document.querySelector<HTMLSpanElement>("#berm-pos-z-value")!;
+const bermElevationValue = document.querySelector<HTMLSpanElement>("#berm-elevation-value")!;
+const bermRotationValue = document.querySelector<HTMLSpanElement>("#berm-rotation-value")!;
+
+for (const input of [
+  bermRadiusInput,
+  bermSweepInput,
+  bermBankInput,
+  bermWidthInput,
+  bermPosXInput,
+  bermPosZInput,
+  bermElevationInput,
+  bermRotationInput,
+]) {
+  input.addEventListener("input", updateBerm);
+}
+updateBerm();
 
 scene.add(new GridHelper(20, 20));
 scene.add(new AmbientLight(0xffffff, 0.6));

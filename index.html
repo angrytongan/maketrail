@@ -22,7 +22,7 @@
         grid-template-rows: 1fr auto;
         gap: 12px;
       }
-      .views {
+      .views, .controls-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
@@ -52,14 +52,14 @@
         inset: 0;
       }
 
-      #roller-controls {
+      .controls {
         display: grid;
         grid-template-columns: auto 1fr auto;
         gap: 4px 8px;
         align-items: center;
         padding: 10px 14px;
       }
-      #roller-controls span { text-align: right; min-width: 3.5em; }
+      .controls span { text-align: right; min-width: 3.5em; }
     </style>
   </head>
   <body>
@@ -75,40 +75,79 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">Roller Controls</div>
-        <div id="roller-controls">
-          <label for="roller-length">Length</label>
-          <input type="range" id="roller-length" min="1" max="8" step="0.1" value="3" />
-          <span id="roller-length-value"></span>
+      <div class="controls-row">
+        <div class="card">
+          <div class="card-header">Roller Controls</div>
+          <div class="controls">
+            <label for="roller-length">Length</label>
+            <input type="range" id="roller-length" min="1" max="8" step="0.1" value="3" />
+            <span id="roller-length-value"></span>
 
-          <label for="roller-height">Height</label>
-          <input type="range" id="roller-height" min="0.05" max="1" step="0.01" value="0.3" />
-          <span id="roller-height-value"></span>
+            <label for="roller-height">Height</label>
+            <input type="range" id="roller-height" min="0.05" max="1" step="0.01" value="0.3" />
+            <span id="roller-height-value"></span>
 
-          <label for="roller-width">Width</label>
-          <input type="range" id="roller-width" min="0.3" max="4" step="0.1" value="1.2" />
-          <span id="roller-width-value"></span>
+            <label for="roller-width">Width</label>
+            <input type="range" id="roller-width" min="0.3" max="4" step="0.1" value="1.2" />
+            <span id="roller-width-value"></span>
 
-          <label for="roller-periods">Periods</label>
-          <input type="range" id="roller-periods" min="1" max="6" step="1" value="1" />
-          <span id="roller-periods-value"></span>
+            <label for="roller-periods">Periods</label>
+            <input type="range" id="roller-periods" min="1" max="6" step="1" value="1" />
+            <span id="roller-periods-value"></span>
 
-          <label for="roller-pos-x">Position X</label>
-          <input type="range" id="roller-pos-x" min="-9" max="9" step="0.1" value="0" />
-          <span id="roller-pos-x-value"></span>
+            <label for="roller-pos-x">Position X</label>
+            <input type="range" id="roller-pos-x" min="-9" max="9" step="0.1" value="0" />
+            <span id="roller-pos-x-value"></span>
 
-          <label for="roller-pos-z">Position Z</label>
-          <input type="range" id="roller-pos-z" min="-9" max="9" step="0.1" value="0" />
-          <span id="roller-pos-z-value"></span>
+            <label for="roller-pos-z">Position Z</label>
+            <input type="range" id="roller-pos-z" min="-9" max="9" step="0.1" value="0" />
+            <span id="roller-pos-z-value"></span>
 
-          <label for="roller-elevation">Elevation</label>
-          <input type="range" id="roller-elevation" min="0" max="4" step="0.1" value="3" />
-          <span id="roller-elevation-value"></span>
+            <label for="roller-elevation">Elevation</label>
+            <input type="range" id="roller-elevation" min="0" max="4" step="0.1" value="3" />
+            <span id="roller-elevation-value"></span>
 
-          <label for="roller-rotation">Rotation</label>
-          <input type="range" id="roller-rotation" min="0" max="359" step="1" value="0" />
-          <span id="roller-rotation-value"></span>
+            <label for="roller-rotation">Rotation</label>
+            <input type="range" id="roller-rotation" min="0" max="359" step="1" value="0" />
+            <span id="roller-rotation-value"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Berm Controls</div>
+          <div class="controls">
+            <label for="berm-radius">Radius</label>
+            <input type="range" id="berm-radius" min="1.8" max="6" step="0.1" value="4" />
+            <span id="berm-radius-value"></span>
+
+            <label for="berm-sweep">Sweep angle</label>
+            <input type="range" id="berm-sweep" min="10" max="180" step="1" value="90" />
+            <span id="berm-sweep-value"></span>
+
+            <label for="berm-bank">Bank angle</label>
+            <input type="range" id="berm-bank" min="0" max="60" step="1" value="35" />
+            <span id="berm-bank-value"></span>
+
+            <label for="berm-width">Width</label>
+            <input type="range" id="berm-width" min="1" max="4" step="0.1" value="2" />
+            <span id="berm-width-value"></span>
+
+            <label for="berm-pos-x">Position X</label>
+            <input type="range" id="berm-pos-x" min="-9" max="9" step="0.1" value="-4" />
+            <span id="berm-pos-x-value"></span>
+
+            <label for="berm-pos-z">Position Z</label>
+            <input type="range" id="berm-pos-z" min="-9" max="9" step="0.1" value="-4" />
+            <span id="berm-pos-z-value"></span>
+
+            <label for="berm-elevation">Elevation</label>
+            <input type="range" id="berm-elevation" min="0" max="4" step="0.1" value="1.5" />
+            <span id="berm-elevation-value"></span>
+
+            <label for="berm-rotation">Rotation</label>
+            <input type="range" id="berm-rotation" min="0" max="359" step="1" value="0" />
+            <span id="berm-rotation-value"></span>
+          </div>
         </div>
       </div>
     </div>
