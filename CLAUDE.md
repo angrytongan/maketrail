@@ -4,6 +4,10 @@ Browser app to design and visualise a mountain bike trail: a 2D heightmap editor
 
 Default terrain: 20m x 20m x 0 elevation grid, vertex spacing 0.5m, grid size configurable.
 
+## Decisions
+
+[docs/decisions.md](docs/decisions.md) — scope/architecture decisions (persistence, trail marking, obstacle editing, difficulty rating, undo, future build-export). Check this before assuming how something should work.
+
 ## Research
 
 Read only the file(s) relevant to the current task — don't load all of them if you're focused on one concept.
