@@ -30,6 +30,10 @@ Local only — browser storage plus explicit import/export of JSON files. No bac
 - Beyond the shared placement params (position, rotation), each obstacle type has its own **type-specific parameters** on top of the base shape params (e.g. the roller's `periods`, letting several humps chain into one obstacle instance rather than placing/aligning separate rollers by hand). Expect berms/kickers to need their own type-specific params too (e.g. a kicker's takeoff-profile choice from research/jumps.md).
 - MVP build order: **roller first** — simplest shape (single sine curve, no separate linked pieces), proves the terrain-mesh + parametric-obstacle + live-3D pipeline before tackling berms (banking/turn blending) or kickers (linked takeoff/gap/landing pieces).
 
+## Obstacle terrain transitions
+
+Not implemented yet — noted for later. A berm's cross-section is banked immediately at both ends of its sweep (see `src/obstacles/berm.ts`), so there's currently no smooth ramp from the surrounding terrain's actual height up onto the berm's raised edge — a rider would hit a lip rather than transition on. Proposed: a per-instance option (e.g. `generateTransitions: boolean`) that, when enabled, builds lead-in/lead-out connector geometry from the ground terrain height to the obstacle's entry/exit edges. Likely relevant to other obstacles with a raised entry/exit too, not just berms (see [research/berms.md](../research/berms.md)).
+
 ## Obstacle directionality
 
 Not implemented yet — noted for later. Some obstacle types are one-way: an asymmetric kicker/lander (arc'd takeoff, sloped landing) only works ridden in the intended direction, unlike a symmetric roller which is the same either way. Not yet designed, but will need:

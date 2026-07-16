@@ -45,4 +45,5 @@ Input speed range assumed: 13–40 km/h (typical trail riding speed).
 
 - Berm obstacle params: `radius`, `bank_angle`, `width`, `entry/exit height`. Height can default to `width * 0.4` (midpoint of the 1/3–1/2 rule) unless overridden.
 - The `lean_angle = arctan(v²/gr)` formula is the key **simulation check**: given a simulated rider speed through the berm and its actual radius, compute required lean angle and compare to the berm's built banking angle — flag if the berm is under-banked for the speed it's likely to be taken at (or over-banked, which is just uncomfortable rather than dangerous).
+- The berm's cross-section is banked right from its entry/exit edges, with no ramp up from the surrounding terrain's actual height — see [[decisions]]'s "Obstacle terrain transitions" for the proposed per-instance option to generate lead-in/lead-out connector geometry.
 - See [[simulation]].
