@@ -55,16 +55,17 @@ scene.add(terrain);
 // own local origin (see buildRollerGeometry) so rotation pivots around the
 // obstacle's center, not a corner.
 const rollerMaterial = new MeshLambertMaterial({ color: 0xb5652d });
-const roller = new Mesh(buildRollerGeometry({ length: 3, height: 0.3, width: 1.2 }), rollerMaterial);
+const roller = new Mesh(buildRollerGeometry({ length: 3, height: 0.3, width: 1.2, periods: 1 }), rollerMaterial);
 scene.add(roller);
 
 function updateRoller(): void {
   const length = Number(lengthInput.value);
   const height = Number(heightInput.value);
   const width = Number(widthInput.value);
+  const periods = Number(periodsInput.value);
 
   roller.geometry.dispose();
-  roller.geometry = buildRollerGeometry({ length, height, width });
+  roller.geometry = buildRollerGeometry({ length, height, width, periods });
 
   roller.position.set(Number(posXInput.value), Number(elevationInput.value), Number(posZInput.value));
   roller.rotation.y = (Number(rotationInput.value) * Math.PI) / 180;
@@ -72,6 +73,7 @@ function updateRoller(): void {
   lengthValue.textContent = `${length.toFixed(1)}m`;
   heightValue.textContent = `${height.toFixed(2)}m`;
   widthValue.textContent = `${width.toFixed(1)}m`;
+  periodsValue.textContent = `${periods}`;
   posXValue.textContent = `${Number(posXInput.value).toFixed(1)}m`;
   posZValue.textContent = `${Number(posZInput.value).toFixed(1)}m`;
   elevationValue.textContent = `${Number(elevationInput.value).toFixed(1)}m`;
@@ -81,6 +83,7 @@ function updateRoller(): void {
 const lengthInput = document.querySelector<HTMLInputElement>("#roller-length")!;
 const heightInput = document.querySelector<HTMLInputElement>("#roller-height")!;
 const widthInput = document.querySelector<HTMLInputElement>("#roller-width")!;
+const periodsInput = document.querySelector<HTMLInputElement>("#roller-periods")!;
 const posXInput = document.querySelector<HTMLInputElement>("#roller-pos-x")!;
 const posZInput = document.querySelector<HTMLInputElement>("#roller-pos-z")!;
 const elevationInput = document.querySelector<HTMLInputElement>("#roller-elevation")!;
@@ -88,12 +91,13 @@ const rotationInput = document.querySelector<HTMLInputElement>("#roller-rotation
 const lengthValue = document.querySelector<HTMLSpanElement>("#roller-length-value")!;
 const heightValue = document.querySelector<HTMLSpanElement>("#roller-height-value")!;
 const widthValue = document.querySelector<HTMLSpanElement>("#roller-width-value")!;
+const periodsValue = document.querySelector<HTMLSpanElement>("#roller-periods-value")!;
 const posXValue = document.querySelector<HTMLSpanElement>("#roller-pos-x-value")!;
 const posZValue = document.querySelector<HTMLSpanElement>("#roller-pos-z-value")!;
 const elevationValue = document.querySelector<HTMLSpanElement>("#roller-elevation-value")!;
 const rotationValue = document.querySelector<HTMLSpanElement>("#roller-rotation-value")!;
 
-for (const input of [lengthInput, heightInput, widthInput, posXInput, posZInput, elevationInput, rotationInput]) {
+for (const input of [lengthInput, heightInput, widthInput, periodsInput, posXInput, posZInput, elevationInput, rotationInput]) {
   input.addEventListener("input", updateRoller);
 }
 updateRoller();

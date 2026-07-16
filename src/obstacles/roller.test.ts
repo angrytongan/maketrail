@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildRollerGeometry } from "./roller";
 
 describe("buildRollerGeometry", () => {
-  const params = { length: 3, height: 0.3, width: 1.2 };
+  const params = { length: 3, height: 0.3, width: 1.2, periods: 1 };
 
   it("is a full sine period: crest at length/4, trough at 3*length/4, back to 0 at mid/ends", () => {
     const geometry = buildRollerGeometry(params);
@@ -51,5 +51,23 @@ describe("buildRollerGeometry", () => {
   it("computes vertex normals", () => {
     const geometry = buildRollerGeometry(params);
     expect(geometry.getAttribute("normal")).toBeDefined();
+  });
+
+  it("chains periods end-to-end, keeping each hump's own length (total footprint = length * periods)", () => {
+    const chained = { ...params, periods: 2 };
+    const geometry = buildRollerGeometry(chained);
+    const position = geometry.getAttribute("position");
+
+    // 32 segments per period * 2 periods = 64 segments, so the pattern from
+    // a single period (quarter/mid/three-quarter/end) repeats at the same
+    // segment offsets in the second period.
+    const quarterIndex = 8 * 2;
+    const secondPeriodQuarterIndex = (32 + 8) * 2;
+    const totalLength = chained.length * chained.periods;
+
+    expect(position.getY(quarterIndex)).toBeCloseTo(chained.height / 2, 6);
+    expect(position.getY(secondPeriodQuarterIndex)).toBeCloseTo(chained.height / 2, 6);
+    expect(position.getX(0)).toBeCloseTo(-totalLength / 2, 6);
+    expect(position.getX(position.count - 2)).toBeCloseTo(totalLength / 2, 6);
   });
 });
