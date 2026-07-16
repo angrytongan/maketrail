@@ -26,7 +26,15 @@ Local only — browser storage plus explicit import/export of JSON files. No bac
 - Obstacles are defined parametrically (type + params, e.g. a roller's length/height ratio). Editing params updates the 3D view in real time.
 - Placement is **free** — drag an obstacle anywhere on the heightmap and rotate it freely. Not snapped or tied to the trail spline in any way (trail marking and obstacle placement are independent concerns).
 - Obstacles are **separate 3D objects overlaid on the terrain**, not a deformation of the terrain height field. Terrain and obstacles stay as two independent data structures — simpler to implement/edit parametrically, at the cost of possible clipping if placed on steeply sloped terrain (acceptable for now).
+- Every obstacle's geometry is built **centered on its own local origin** (extents span symmetrically, e.g. `-length/2..length/2`), so that the position/rotation transform applied on top pivots around the obstacle's actual center rather than a corner. See `src/obstacles/roller.ts` for the pattern to follow for berms/kickers.
 - MVP build order: **roller first** — simplest shape (single sine curve, no separate linked pieces), proves the terrain-mesh + parametric-obstacle + live-3D pipeline before tackling berms (banking/turn blending) or kickers (linked takeoff/gap/landing pieces).
+
+## Obstacle directionality
+
+Not implemented yet — noted for later. Some obstacle types are one-way: an asymmetric kicker/lander (arc'd takeoff, sloped landing) only works ridden in the intended direction, unlike a symmetric roller which is the same either way. Not yet designed, but will need:
+- A per-obstacle-type flag (or per-instance override) for whether it's directional.
+- A visual indicator on directional obstacles — likely an arrow rendered on/above the obstacle showing entry → exit — so it's obvious in both the 2D editor and 3D view which way it's meant to be ridden.
+- The trail simulation ([[simulation]]) should flag a directional obstacle that the trail line approaches from its exit side, since that's a real "you built this backwards" error, not just a style nitpick.
 
 ## Difficulty rating
 

@@ -14,4 +14,4 @@ npm run lint        # lint
 npm run typecheck   # type-check
 ```
 
-Currently a terrain-only spike: mock survey points → local meters → triangulated mesh → rendered in Three.js. No obstacles or editing UI yet.
+Currently a spike: mock survey points → local meters → triangulated mesh → rendered in Three.js, plus a parametric roller obstacle overlaid on it with live-updating controls (length/height/width/position/rotation). No 2D editor, drag-and-drop placement, or trail marking yet — see [CLAUDE.md](CLAUDE.md) for status.

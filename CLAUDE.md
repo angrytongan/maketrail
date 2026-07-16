@@ -27,4 +27,8 @@ Vite + TypeScript + Three.js, npm, Vitest, ESLint (flat config, `typescript-esli
 
 ## Status
 
-Terrain spike (`src/terrain/`) — imports mock lat/lon/height points, converts to local meters, triangulates with `d3-delaunay` into a Three.js mesh (native irregular mesh, not resampled to a grid, per decisions), renders with OrbitControls. No obstacles, no editing UI, no real import yet — next step per decisions is a single roller obstacle overlaid on this terrain.
+Terrain spike (`src/terrain/`) — imports mock lat/lon/height points, converts to local meters, triangulates with `d3-delaunay` into a Three.js mesh (native irregular mesh, not resampled to a grid, per decisions), renders with OrbitControls.
+
+Roller obstacle (`src/obstacles/roller.ts`) — parametric sine-wave mesh (single hump, per the module's own comment on why it deviates from research/rollers.md's full-period formula), overlaid on the terrain as a separate object. `index.html`/`main.ts` wire up plain HTML range-input controls (length, height, position, rotation) that rebuild the geometry and update the mesh transform live, proving the parametric-obstacle + live-3D pipeline from docs/decisions.md.
+
+No 2D top-down editor, no drag-and-drop placement, no trail marking, no real import yet — next step is likely the 2D editor (terrain vertex editing + obstacle placement UI) or extending the obstacle set to berms/kickers, per docs/decisions.md.
