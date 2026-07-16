@@ -18,12 +18,14 @@ Local only — browser storage plus explicit import/export of JSON files. No bac
 - User clicks a sequence of waypoints on the 2D heightmap.
 - A spline runs through them, editable via per-point tangent handles (Bezier-style handles the user can drag), not just the waypoints themselves.
 - In the 3D view, the trail is **not** rendered as a floating spline curve — it's a distinct-colored path draped directly onto the terrain surface. The spline/handle representation is a 2D-editor-only concept.
+- The trail renders as a **ribbon with a configurable width** (not just a centerline), draped over the terrain — width default is an open question, candidate reference is the ~2m corridor in [research/pump-tracks.md](../research/pump-tracks.md).
 
 ## Obstacle editing
 
 - All placement and parameter editing happens in the 2D top-down editor only — no direct manipulation (drag/rotate) in the 3D viewport for now.
 - Obstacles are defined parametrically (type + params, e.g. a roller's length/height ratio). Editing params updates the 3D view in real time.
 - Placement is **free** — drag an obstacle anywhere on the heightmap and rotate it freely. Not snapped or tied to the trail spline in any way (trail marking and obstacle placement are independent concerns).
+- Obstacles are **separate 3D objects overlaid on the terrain**, not a deformation of the terrain height field. Terrain and obstacles stay as two independent data structures — simpler to implement/edit parametrically, at the cost of possible clipping if placed on steeply sloped terrain (acceptable for now).
 - MVP build order: **roller first** — simplest shape (single sine curve, no separate linked pieces), proves the terrain-mesh + parametric-obstacle + live-3D pipeline before tackling berms (banking/turn blending) or kickers (linked takeoff/gap/landing pieces).
 
 ## Difficulty rating
@@ -39,6 +41,14 @@ Simple/schematic for the 3D view — flat-shaded or basic materials, solid color
 ## Simulation trigger
 
 On-demand only — user clicks "run simulation" to get flagged issues, rather than continuous live validation while editing. Avoids performance concerns from re-running physics checks on every edit; revisit if the checks turn out to be cheap enough to run live.
+
+## Simulation scope
+
+Since obstacle placement is free (not tied to the trail), simulation only evaluates obstacles that the trail line actually passes through/near — not every obstacle placed on the map.
+
+## Rider/bike profile
+
+Named presets (e.g. beginner/intermediate/advanced/expert, matching the difficulty bands already in [research/berms.md](../research/berms.md)) with sensible mass/wheelbase/speed defaults per preset, selected for a simulation run. Presets feed into the aggregate difficulty rating above.
 
 ## Undo / history
 
