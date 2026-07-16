@@ -15,6 +15,7 @@ Read only the file(s) relevant to the current task — don't load all of them if
 - [research/simulation.md](research/simulation.md) — rider+bike sim design, checks that flag bad geometry, links back to the above
 - [research/sources-to-review.md](research/sources-to-review.md) — IMBA PDFs found but not yet read; download + OCR later
 - [research/build-plans.md](research/build-plans.md) — Lunch Ride MTB physical build blueprints (kicker, skinny, manual machine); not yet read
+- [research/velomaster-features.md](research/velomaster-features.md) — Velosolutions Velomaster obstacle catalog; candidates for new obstacle types (skinny/rail, seesaw)
 
 ## Status
 
