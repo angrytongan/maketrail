@@ -14,6 +14,7 @@ Read only the file(s) relevant to the current task — don't load all of them if
 - [research/pump-tracks.md](research/pump-tracks.md) — Velosolutions track-wide standards (width, turn height/radius, materials)
 - [research/simulation.md](research/simulation.md) — rider+bike sim design, checks that flag bad geometry, links back to the above
 - [research/sources-to-review.md](research/sources-to-review.md) — IMBA PDFs found but not yet read; download + OCR later
+- [research/build-plans.md](research/build-plans.md) — Lunch Ride MTB physical build blueprints (kicker, skinny, manual machine); not yet read
 
 ## Status
 
