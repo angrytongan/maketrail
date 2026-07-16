@@ -21,10 +21,9 @@ Ratio is length : height, e.g. `10:1` = 3m long, 0.3m tall (the ratio is unitles
 | 10:2   | ~0.61m | — |
 | 10:2.5 | ~0.76m | ~38° |
 
-Default/most common: **10:1**. Formula for a 0.3m-tall, 3m-long roller:
-`y = 0.152 * sin(x / 0.582)`  (metres, x along length) — i.e. amplitude = height/2, and the divisor sets the wavelength to match the 3m/1-cycle length.
+Default/most common: **10:1**. Trailism's original (imperial) formula for a 12"-tall, 10ft-long roller: `y = 6 * sin(x / 19.0985)` (inches) — one **full sine period** spans the whole 10ft length (`19.0985 * 2π ≈ 120in = 10ft`), not a half-period/single hump. Converted to metric (0.3m-tall, ~3.05m-long): `y = 0.152 * sin(x / 0.485)` (metres).
 
-Generalizes to: `y = (height/2) * sin(x / k)` where `k` is chosen so one full sine period spans the roller length.
+Generalizes to: `y = (height/2) * sin(x / k)` where `k = length / (2π)`, so one full sine period (crest, back to zero, trough, back to zero) spans the roller's length — this is what lets successive rollers tile end-to-end into a continuous pump-track sequence.
 
 ## Spacing (Velosolutions standard)
 

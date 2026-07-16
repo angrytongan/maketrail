@@ -9,10 +9,10 @@ export interface RollerParams {
 const LENGTH_SEGMENTS = 32;
 
 /**
- * Builds a roller obstacle: a sine-wave hump along `length`, flat across
- * `width`. Modeled as a single half-period hump (one crest) rather than the
- * full-period pump-track sequence in research/rollers.md, since this
- * represents one standalone obstacle rather than a continuous run.
+ * Builds a roller obstacle: one full sine-wave period along `length`, flat
+ * across `width`, per research/rollers.md (crest at length/4, trough at
+ * 3*length/4) — this is what lets successive rollers tile into a continuous
+ * pump-track sequence, rather than a single one-sided hump.
  *
  * Geometry is centered on the local origin (x and z both span
  * -length/2..length/2 and -width/2..width/2) so that an obstacle's
@@ -26,7 +26,7 @@ export function buildRollerGeometry(params: RollerParams): BufferGeometry {
   for (let i = 0; i <= LENGTH_SEGMENTS; i++) {
     const t = (i / LENGTH_SEGMENTS) * length;
     const x = t - length / 2;
-    const y = (height / 2) * Math.sin((t / length) * Math.PI);
+    const y = (height / 2) * Math.sin((t / length) * 2 * Math.PI);
     for (const z of [-width / 2, width / 2]) {
       positions.push(x, y, z);
     }

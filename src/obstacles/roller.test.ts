@@ -4,13 +4,18 @@ import { buildRollerGeometry } from "./roller";
 describe("buildRollerGeometry", () => {
   const params = { length: 3, height: 0.3, width: 1.2 };
 
-  it("peaks at height/2 at the centered mid-length (x=0)", () => {
+  it("is a full sine period: crest at length/4, trough at 3*length/4, back to 0 at mid/ends", () => {
     const geometry = buildRollerGeometry(params);
     const position = geometry.getAttribute("position");
-    // mid-length is the middle pair of vertices (32 segments -> index 16)
+    // 32 length segments: quarter=8, mid=16, three-quarter=24, end=32
+    const quarterIndex = 8 * 2;
     const midIndex = 16 * 2;
+    const threeQuarterIndex = 24 * 2;
+
+    expect(position.getY(quarterIndex)).toBeCloseTo(params.height / 2, 6);
+    expect(position.getY(midIndex)).toBeCloseTo(0, 6);
+    expect(position.getY(threeQuarterIndex)).toBeCloseTo(-params.height / 2, 6);
     expect(position.getX(midIndex)).toBeCloseTo(0, 6);
-    expect(position.getY(midIndex)).toBeCloseTo(params.height / 2, 6);
   });
 
   it("returns to ~0 height at both ends, centered at -length/2 and length/2", () => {
