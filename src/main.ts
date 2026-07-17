@@ -14,6 +14,7 @@ import { toLocal, type GeoPoint } from "./terrain/coords";
 import { buildTerrainGeometry } from "./terrain/mesh";
 import { buildRollerGeometry } from "./obstacles/roller";
 import { buildBermGeometry } from "./obstacles/berm";
+import { buildKickerGeometry } from "./obstacles/kicker";
 
 // Mock survey data: a scattered, irregularly-spaced set of points forming a
 // gentle bump, standing in for a real GPS/lat-lon-height import.
@@ -161,6 +162,61 @@ for (const input of [
   input.addEventListener("input", updateBerm);
 }
 updateBerm();
+
+// Kicker obstacle: same overlaid-on-terrain convention as the roller/berm.
+// X is centered but Y stays anchored at 0 for the base (see
+// buildKickerGeometry) since a kicker is inherently asymmetric.
+const kickerMaterial = new MeshLambertMaterial({ color: 0xc94f4f });
+const kicker = new Mesh(buildKickerGeometry({ height: 0.5, lipAngle: 25, width: 1.2 }), kickerMaterial);
+scene.add(kicker);
+
+function updateKicker(): void {
+  const height = Number(kickerHeightInput.value);
+  const lipAngle = Number(kickerLipAngleInput.value);
+  const width = Number(kickerWidthInput.value);
+
+  kicker.geometry.dispose();
+  kicker.geometry = buildKickerGeometry({ height, lipAngle, width });
+
+  kicker.position.set(Number(kickerPosXInput.value), Number(kickerElevationInput.value), Number(kickerPosZInput.value));
+  kicker.rotation.y = (Number(kickerRotationInput.value) * Math.PI) / 180;
+
+  kickerHeightValue.textContent = `${height.toFixed(2)}m`;
+  kickerLipAngleValue.textContent = `${lipAngle}°`;
+  kickerWidthValue.textContent = `${width.toFixed(1)}m`;
+  kickerPosXValue.textContent = `${Number(kickerPosXInput.value).toFixed(1)}m`;
+  kickerPosZValue.textContent = `${Number(kickerPosZInput.value).toFixed(1)}m`;
+  kickerElevationValue.textContent = `${Number(kickerElevationInput.value).toFixed(1)}m`;
+  kickerRotationValue.textContent = `${kickerRotationInput.value}°`;
+}
+
+const kickerHeightInput = document.querySelector<HTMLInputElement>("#kicker-height")!;
+const kickerLipAngleInput = document.querySelector<HTMLInputElement>("#kicker-lip-angle")!;
+const kickerWidthInput = document.querySelector<HTMLInputElement>("#kicker-width")!;
+const kickerPosXInput = document.querySelector<HTMLInputElement>("#kicker-pos-x")!;
+const kickerPosZInput = document.querySelector<HTMLInputElement>("#kicker-pos-z")!;
+const kickerElevationInput = document.querySelector<HTMLInputElement>("#kicker-elevation")!;
+const kickerRotationInput = document.querySelector<HTMLInputElement>("#kicker-rotation")!;
+const kickerHeightValue = document.querySelector<HTMLSpanElement>("#kicker-height-value")!;
+const kickerLipAngleValue = document.querySelector<HTMLSpanElement>("#kicker-lip-angle-value")!;
+const kickerWidthValue = document.querySelector<HTMLSpanElement>("#kicker-width-value")!;
+const kickerPosXValue = document.querySelector<HTMLSpanElement>("#kicker-pos-x-value")!;
+const kickerPosZValue = document.querySelector<HTMLSpanElement>("#kicker-pos-z-value")!;
+const kickerElevationValue = document.querySelector<HTMLSpanElement>("#kicker-elevation-value")!;
+const kickerRotationValue = document.querySelector<HTMLSpanElement>("#kicker-rotation-value")!;
+
+for (const input of [
+  kickerHeightInput,
+  kickerLipAngleInput,
+  kickerWidthInput,
+  kickerPosXInput,
+  kickerPosZInput,
+  kickerElevationInput,
+  kickerRotationInput,
+]) {
+  input.addEventListener("input", updateKicker);
+}
+updateKicker();
 
 scene.add(new GridHelper(20, 20));
 scene.add(new AmbientLight(0xffffff, 0.6));
