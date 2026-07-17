@@ -1,0 +1,29 @@
+{
+  "name": "maketrail",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Browser app for designing and visualising a mountain bike trail: a 2D heightmap editor paired with a 3D render of the same terrain.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "d3-delaunay": "^6.0.4",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/d3-delaunay": "^6.0.4",
+    "@types/three": "^0.185.1",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}
