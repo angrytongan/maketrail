@@ -20,6 +20,7 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { toLocal, type GeoPoint } from "./terrain/coords";
 import { buildTerrainGeometry } from "./terrain/mesh";
+import { heightToColor } from "./terrain/colorRamp";
 import { sampleTerrainHeight } from "./terrain/sample";
 import { getPointsInBrush } from "./terrain/brush";
 import { buildRollerGeometry, type RollerParams } from "./obstacles/roller";
@@ -60,15 +61,46 @@ const scene = new Scene();
 scene.background = null;
 
 const terrainGeometry = buildTerrainGeometry(localPoints);
-const terrainMaterial = new MeshLambertMaterial({ color: 0x6b8f5a });
+// Height-based color ramp instead of a flat color, so both views read
+// elevation the same way — flat terrain is hard to judge from directly
+// overhead, where lighting/shading gives almost no depth cue.
+terrainGeometry.setAttribute("color", new Float32BufferAttribute(new Float32Array(localPoints.length * 3), 3));
+const terrainMaterial = new MeshLambertMaterial({ vertexColors: true });
 const terrain = new Mesh(terrainGeometry, terrainMaterial);
 scene.add(terrain);
 
+function updateTerrainColors(): void {
+  const colorAttr = terrainGeometry.getAttribute("color");
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of localPoints) {
+    if (p.z < min) min = p.z;
+    if (p.z > max) max = p.z;
+  }
+  localPoints.forEach((p, i) => colorAttr.setXYZ(i, ...heightToColor(p.z, min, max)));
+  colorAttr.needsUpdate = true;
+}
+updateTerrainColors();
+
 scene.add(new GridHelper(20, 20));
-scene.add(new AmbientLight(0xffffff, 0.6));
-const sun = new DirectionalLight(0xffffff, 1.2);
-sun.position.set(10, 15, 5);
+scene.add(new AmbientLight(0xffffff, 0.3));
+// Low, raking angle (not overhead) so small height changes cast visible
+// shading/shadows across the terrain instead of washing out flat.
+const sun = new DirectionalLight(0xffffff, 1.6);
+sun.position.set(-14, 7, 9);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const shadowExtent = 14;
+sun.shadow.camera.left = -shadowExtent;
+sun.shadow.camera.right = shadowExtent;
+sun.shadow.camera.top = shadowExtent;
+sun.shadow.camera.bottom = -shadowExtent;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 50;
 scene.add(sun);
+
+terrain.receiveShadow = true;
+terrain.castShadow = true;
 
 // --- Terrain vertex markers + brush --------------------------------------
 // Editing is brush-based rather than one-vertex-at-a-time (dragging every
@@ -143,6 +175,7 @@ function writeHeightsToGeometry(): void {
   terrainPosition.needsUpdate = true;
   markerPosition.needsUpdate = true;
   terrain.geometry.computeVertexNormals();
+  updateTerrainColors();
 }
 
 function applyBrushStroke(worldX: number, worldZ: number, deltaHeight: number): void {
@@ -184,10 +217,12 @@ function applySmoothStroke(worldX: number, worldZ: number): void {
 // pivots around its actual center. Elevation isn't stored — it's sampled
 // from the terrain each time an instance's x/z changes.
 
+// Obstacle geometry is an open single-sided surface (no back faces), so
+// DoubleSide is needed or the mesh disappears when viewed from below/behind.
 const OBSTACLE_MATERIALS: Record<ObstacleType, MeshLambertMaterial> = {
-  roller: new MeshLambertMaterial({ color: 0xb5652d }),
-  berm: new MeshLambertMaterial({ color: 0x8a6bb0 }),
-  kicker: new MeshLambertMaterial({ color: 0xc94f4f }),
+  roller: new MeshLambertMaterial({ color: 0xb5652d, side: DoubleSide }),
+  berm: new MeshLambertMaterial({ color: 0x8a6bb0, side: DoubleSide }),
+  kicker: new MeshLambertMaterial({ color: 0xc94f4f, side: DoubleSide }),
 };
 
 function buildGeometryForInstance(instance: ObstacleInstance) {
@@ -232,6 +267,8 @@ function addObstacle(type: ObstacleType): void {
   instances.push(instance);
 
   const mesh = new Mesh(buildGeometryForInstance(instance), OBSTACLE_MATERIALS[type]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   scene.add(mesh);
   meshesById.set(instance.id, mesh);
   repositionMesh(instance);
@@ -573,6 +610,7 @@ const camera3d = new PerspectiveCamera(60, 1, 0.1, 1000);
 camera3d.position.set(15, 12, 15);
 
 const renderer3d = new WebGLRenderer({ antialias: true });
+renderer3d.shadowMap.enabled = true;
 view3dBody.appendChild(renderer3d.domElement);
 
 const controls = new OrbitControls(camera3d, renderer3d.domElement);
@@ -589,6 +627,7 @@ camera2d.up.set(0, 0, -1);
 camera2d.lookAt(0, 0, 0);
 
 const renderer2d = new WebGLRenderer({ antialias: true });
+renderer2d.shadowMap.enabled = true;
 view2dBody.appendChild(renderer2d.domElement);
 
 function resizeToContainer(renderer: WebGLRenderer, container: HTMLDivElement, camera: PerspectiveCamera | OrthographicCamera): void {

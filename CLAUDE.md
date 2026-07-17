@@ -29,6 +29,10 @@ Vite + TypeScript + Three.js, npm, Vitest, ESLint (flat config, `typescript-esli
 
 Terrain spike (`src/terrain/`) — imports mock lat/lon/height points, converts to local meters, triangulates with `d3-delaunay` into a Three.js mesh (native irregular mesh, not resampled to a grid, per decisions), renders with OrbitControls.
 
+Lighting: a low, raking `DirectionalLight` (not overhead) plus a dimmer `AmbientLight`, so subtle height changes cast visible shading rather than washing out flat. Shadow mapping is on for both renderers (terrain and obstacles cast/receive) — the strongest depth cue for small bumps.
+
+Terrain height color ramp (`src/terrain/colorRamp.ts`), shared by both views: the single terrain mesh uses a `vertexColors` material — a 3-stop hypsometric tint (green → yellow-green → brown) normalized to the terrain's current min/max height, so it always uses full contrast regardless of the actual elevation range. Colors are recomputed every time `writeHeightsToGeometry()` runs, so the ramp updates live as the brush sculpts/smooths. In the 3D view this combines with the raking directional light/shadows above; the 2D view relies on the color ramp alone since its straight-down angle gives lighting almost no depth cue. No vertical exaggeration — deliberately out of scope, the geometry itself is never altered for display.
+
 Roller obstacle (`src/obstacles/roller.ts`) — parametric mesh, `periods` full sine-wave periods chained end-to-end (crest at length/4, trough at 3·length/4 within each period, per research/rollers.md), overlaid on the terrain as a separate object.
 
 Berm obstacle (`src/obstacles/berm.ts`) — parametric banked-arc mesh (radius, sweep angle, bank angle, width; cross-section is a flat tilted plane, not Velosolutions' full concave profile). Only turns toward one side (fixed center of curvature) — mirroring needs a future direction flag.
