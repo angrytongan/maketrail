@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   BufferGeometry,
+  CameraHelper,
   DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
@@ -128,6 +129,7 @@ markerGeometry.setAttribute("position", new Float32BufferAttribute(markerPositio
 markerGeometry.setAttribute("color", new Float32BufferAttribute(markerColors, 3));
 const vertexMarkers = new Points(markerGeometry, new PointsMaterial({ size: 6, sizeAttenuation: false, vertexColors: true }));
 vertexMarkers.visible = false;
+vertexMarkers.layers.set(1); // 2D-view-only (see camera2d.layers.enable(1) below), same as cameraHelper
 scene.add(vertexMarkers);
 
 const brushRing = new Mesh(new RingGeometry(0.92, 1, 32), new MeshBasicMaterial({ color: 0xffe066, side: DoubleSide }));
@@ -616,6 +618,20 @@ view3dBody.appendChild(renderer3d.domElement);
 const controls = new OrbitControls(camera3d, renderer3d.domElement);
 controls.target.set(0, 0, 0);
 
+// Shows the 3D camera + its frustum in the 2D plan view only (layer 1, which
+// only camera2d has enabled below) — seeing it in the 3D view itself would
+// just be clutter around the camera taking that very shot. Drawn from a
+// proxy camera (kept in sync with camera3d's pose each frame, see animate())
+// rather than camera3d directly: camera3d's real far plane (1000) would draw
+// a needlessly long frustum — knowing where it is and which way it's
+// pointing matters more than showing the full render distance.
+const helperCamera = camera3d.clone();
+helperCamera.far = 8;
+helperCamera.updateProjectionMatrix();
+const cameraHelper = new CameraHelper(helperCamera);
+cameraHelper.layers.set(1);
+scene.add(cameraHelper);
+
 // 2D top-down view: an orthographic camera looking straight down at the same
 // scene, and the interactive surface for selecting/moving/rotating
 // obstacles (per docs/decisions.md's 2D-only editing decision). Vertex
@@ -625,6 +641,7 @@ const camera2d = new OrthographicCamera(-PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, PLA
 camera2d.position.set(0, 50, 0);
 camera2d.up.set(0, 0, -1);
 camera2d.lookAt(0, 0, 0);
+camera2d.layers.enable(1);
 
 const renderer2d = new WebGLRenderer({ antialias: true });
 renderer2d.shadowMap.enabled = true;
@@ -783,6 +800,14 @@ window.addEventListener("pointerup", () => {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  helperCamera.position.copy(camera3d.position);
+  helperCamera.quaternion.copy(camera3d.quaternion);
+  if (helperCamera.aspect !== camera3d.aspect) {
+    helperCamera.aspect = camera3d.aspect;
+    helperCamera.updateProjectionMatrix();
+  }
+  helperCamera.updateMatrixWorld();
+  cameraHelper.update(); // frustum shape depends on aspect, which changes on resize
   renderer3d.render(scene, camera3d);
   renderer2d.render(scene, camera2d);
 }
