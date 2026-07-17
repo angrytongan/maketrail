@@ -51,7 +51,9 @@
       }
       .toolbar button:hover { background: #4a4f58; }
       .toolbar button:disabled { opacity: 0.4; cursor: default; }
+      .toolbar button.active { background: #5a6270; border-color: #6a7280; }
       .toolbar .spacer { flex: 1; }
+      #brush-size { width: 150px; }
       #no-selection-hint {
         padding: 10px 14px;
         opacity: 0.6;
@@ -106,12 +108,25 @@
       <div class="controls-row">
         <div class="card">
           <div class="card-header toolbar">
-            <span>Obstacles</span>
+            <span>Editor</span>
+            <button id="mode-obstacles-btn" type="button" class="active">Obstacles</button>
+            <button id="mode-terrain-btn" type="button">Terrain</button>
+          </div>
+
+          <div class="toolbar" id="obstacles-toolbar" style="padding: 8px 12px">
             <button id="add-roller-btn" type="button">+ Roller</button>
             <button id="add-berm-btn" type="button">+ Berm</button>
             <button id="add-kicker-btn" type="button">+ Kicker</button>
             <div class="spacer"></div>
             <button id="remove-selected-btn" type="button" disabled>Remove selected</button>
+          </div>
+
+          <div class="toolbar" id="terrain-toolbar" style="display: none; padding: 8px 12px">
+            <label for="brush-size">Brush size</label>
+            <input type="range" id="brush-size" min="0.5" max="6" step="0.1" value="2" />
+            <span id="brush-size-value"></span>
+            <div class="spacer"></div>
+            <span style="opacity: 0.6">Drag on the 2D Plan View to raise (up) / lower (down) terrain within the brush.</span>
           </div>
 
           <div id="no-selection-hint">

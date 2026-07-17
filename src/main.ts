@@ -1,13 +1,17 @@
 import {
   AmbientLight,
+  BufferGeometry,
   DirectionalLight,
   DoubleSide,
+  Float32BufferAttribute,
   GridHelper,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   OrthographicCamera,
   PerspectiveCamera,
+  Points,
+  PointsMaterial,
   RingGeometry,
   Scene,
   SphereGeometry,
@@ -17,6 +21,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { toLocal, type GeoPoint } from "./terrain/coords";
 import { buildTerrainGeometry } from "./terrain/mesh";
 import { sampleTerrainHeight } from "./terrain/sample";
+import { getPointsInBrush } from "./terrain/brush";
 import { buildRollerGeometry, type RollerParams } from "./obstacles/roller";
 import { buildBermGeometry, type BermParams } from "./obstacles/berm";
 import { buildKickerGeometry, type KickerParams } from "./obstacles/kicker";
@@ -64,6 +69,83 @@ scene.add(new AmbientLight(0xffffff, 0.6));
 const sun = new DirectionalLight(0xffffff, 1.2);
 sun.position.set(10, 15, 5);
 scene.add(sun);
+
+// --- Terrain vertex markers + brush --------------------------------------
+// Editing is brush-based rather than one-vertex-at-a-time (dragging every
+// point individually would be tedious): every terrain point within the
+// brush radius of the cursor is affected together, tapering off toward the
+// brush edge (see terrain/brush.ts). Markers are a single Points object
+// (not one mesh per point) with per-vertex colors so points currently under
+// the brush can be highlighted without any separate hit-test geometry.
+
+const MARKER_Y_OFFSET = 0.05;
+const MARKER_BASE_COLOR = [0.6, 0.63, 0.68];
+const MARKER_HIGHLIGHT_COLOR = [1, 0.878, 0.4]; // 0xffe066
+
+const markerPositions = new Float32Array(localPoints.length * 3);
+const markerColors = new Float32Array(localPoints.length * 3);
+localPoints.forEach((p, i) => {
+  markerPositions[i * 3] = p.x;
+  markerPositions[i * 3 + 1] = p.z + MARKER_Y_OFFSET;
+  markerPositions[i * 3 + 2] = p.y;
+  markerColors.set(MARKER_BASE_COLOR, i * 3);
+});
+
+const markerGeometry = new BufferGeometry();
+markerGeometry.setAttribute("position", new Float32BufferAttribute(markerPositions, 3));
+markerGeometry.setAttribute("color", new Float32BufferAttribute(markerColors, 3));
+const vertexMarkers = new Points(markerGeometry, new PointsMaterial({ size: 6, sizeAttenuation: false, vertexColors: true }));
+vertexMarkers.visible = false;
+scene.add(vertexMarkers);
+
+const brushRing = new Mesh(new RingGeometry(0.92, 1, 32), new MeshBasicMaterial({ color: 0xffe066, side: DoubleSide }));
+brushRing.rotation.x = -Math.PI / 2;
+brushRing.visible = false;
+scene.add(brushRing);
+
+let brushRadius = 2;
+
+function resetBrushHighlight(): void {
+  const colorAttr = markerGeometry.getAttribute("color");
+  for (let i = 0; i < localPoints.length; i++) {
+    colorAttr.setXYZ(i, ...(MARKER_BASE_COLOR as [number, number, number]));
+  }
+  colorAttr.needsUpdate = true;
+  brushRing.visible = false;
+}
+
+function updateBrushHighlight(worldX: number, worldZ: number): void {
+  const effects = getPointsInBrush(localPoints, worldX, worldZ, brushRadius);
+  const highlighted = new Set(effects.map((e) => e.index));
+
+  const colorAttr = markerGeometry.getAttribute("color");
+  for (let i = 0; i < localPoints.length; i++) {
+    const color = highlighted.has(i) ? MARKER_HIGHLIGHT_COLOR : MARKER_BASE_COLOR;
+    colorAttr.setXYZ(i, ...(color as [number, number, number]));
+  }
+  colorAttr.needsUpdate = true;
+
+  brushRing.visible = true;
+  brushRing.position.set(worldX, sampleTerrainHeight(localPoints, worldX, worldZ) + MARKER_Y_OFFSET, worldZ);
+  brushRing.scale.setScalar(brushRadius);
+}
+
+function applyBrushStroke(worldX: number, worldZ: number, deltaHeight: number): void {
+  const effects = getPointsInBrush(localPoints, worldX, worldZ, brushRadius);
+  const terrainPosition = terrain.geometry.getAttribute("position");
+  const markerPosition = markerGeometry.getAttribute("position");
+
+  for (const { index, weight } of effects) {
+    const newHeight = localPoints[index].z + deltaHeight * weight;
+    localPoints[index].z = newHeight;
+    terrainPosition.setY(index, newHeight);
+    markerPosition.setY(index, newHeight + MARKER_Y_OFFSET);
+  }
+
+  terrainPosition.needsUpdate = true;
+  markerPosition.needsUpdate = true;
+  terrain.geometry.computeVertexNormals();
+}
 
 // --- Obstacle instances -----------------------------------------------
 // Each obstacle is a separate object overlaid on the terrain (per
@@ -377,6 +459,45 @@ removeButton.addEventListener("click", removeSelected);
 
 selectInstance(null);
 
+// --- Edit mode: Obstacles vs Terrain -------------------------------------
+// Both target the same 2D view, so an explicit mode avoids ambiguity about
+// what a click/drag affects (docs/decisions.md).
+
+type EditMode = "obstacles" | "terrain";
+let editMode: EditMode = "obstacles";
+
+const modeObstaclesBtn = document.querySelector<HTMLButtonElement>("#mode-obstacles-btn")!;
+const modeTerrainBtn = document.querySelector<HTMLButtonElement>("#mode-terrain-btn")!;
+const obstaclesToolbar = document.querySelector<HTMLDivElement>("#obstacles-toolbar")!;
+const terrainToolbar = document.querySelector<HTMLDivElement>("#terrain-toolbar")!;
+const brushSizeInput = document.querySelector<HTMLInputElement>("#brush-size")!;
+const brushSizeValue = document.querySelector<HTMLSpanElement>("#brush-size-value")!;
+
+function setEditMode(mode: EditMode): void {
+  editMode = mode;
+  modeObstaclesBtn.classList.toggle("active", mode === "obstacles");
+  modeTerrainBtn.classList.toggle("active", mode === "terrain");
+  obstaclesToolbar.style.display = mode === "obstacles" ? "" : "none";
+  terrainToolbar.style.display = mode === "terrain" ? "" : "none";
+  vertexMarkers.visible = mode === "terrain";
+
+  if (mode === "terrain") {
+    selectInstance(null);
+  } else {
+    resetBrushHighlight();
+  }
+}
+
+modeObstaclesBtn.addEventListener("click", () => setEditMode("obstacles"));
+modeTerrainBtn.addEventListener("click", () => setEditMode("terrain"));
+brushSizeInput.addEventListener("input", () => {
+  brushRadius = Number(brushSizeInput.value);
+  brushSizeValue.textContent = `${brushRadius.toFixed(1)}m`;
+});
+brushSizeValue.textContent = `${brushRadius.toFixed(1)}m`;
+
+setEditMode("obstacles");
+
 // --- Views ---------------------------------------------------------------
 
 const view3dBody = document.querySelector<HTMLDivElement>("#view-3d-body")!;
@@ -462,10 +583,28 @@ function isNearHandle(instance: ObstacleInstance, worldX: number, worldZ: number
 type DragMode = { kind: "move" | "rotate"; instanceId: string } | null;
 let dragMode: DragMode = null;
 
+// Terrain-brush dragging fixes the brush's world (x, z) at wherever the drag
+// started — vertical mouse movement only ever changes height, never the
+// brush's ground position. This matters because the 2D view's screen-Y maps
+// to world Z (see view2d/projection.ts): if we kept recomputing (x, z) from
+// the live cursor position while dragging, moving the mouse vertically to
+// control height would also drag the brush around the ground plane, since
+// that's the same screen axis. Each move event still applies an incremental
+// height delta (based on how far the mouse moved since the previous event),
+// which is what lets you keep raising/lowering in one continuous stroke.
+const HEIGHT_DRAG_SENSITIVITY = 0.02; // metres per pixel
+let terrainDrag: { x: number; z: number; lastClientY: number } | null = null;
+
 renderer2d.domElement.addEventListener("pointerdown", (event) => {
   const { x, z } = canvasEventToWorld(event);
-  const selected = selectedId ? findInstance(selectedId) : undefined;
 
+  if (editMode === "terrain") {
+    terrainDrag = { x, z, lastClientY: event.clientY };
+    updateBrushHighlight(x, z);
+    return;
+  }
+
+  const selected = selectedId ? findInstance(selectedId) : undefined;
   if (selected && isNearHandle(selected, x, z)) {
     dragMode = { kind: "rotate", instanceId: selected.id };
     return;
@@ -481,10 +620,23 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
 });
 
 renderer2d.domElement.addEventListener("pointermove", (event) => {
+  const { x, z } = canvasEventToWorld(event);
+
+  if (editMode === "terrain") {
+    if (terrainDrag) {
+      const deltaPixels = terrainDrag.lastClientY - event.clientY;
+      applyBrushStroke(terrainDrag.x, terrainDrag.z, deltaPixels * HEIGHT_DRAG_SENSITIVITY);
+      terrainDrag.lastClientY = event.clientY;
+      updateBrushHighlight(terrainDrag.x, terrainDrag.z);
+    } else {
+      updateBrushHighlight(x, z);
+    }
+    return;
+  }
+
   if (!dragMode) return;
   const instance = findInstance(dragMode.instanceId);
   if (!instance) return;
-  const { x, z } = canvasEventToWorld(event);
 
   if (dragMode.kind === "move") {
     instance.x = x;
@@ -498,8 +650,13 @@ renderer2d.domElement.addEventListener("pointermove", (event) => {
   syncPanel(instance);
 });
 
+renderer2d.domElement.addEventListener("pointerleave", () => {
+  if (editMode === "terrain") resetBrushHighlight();
+});
+
 window.addEventListener("pointerup", () => {
   dragMode = null;
+  terrainDrag = null;
 });
 
 function animate() {

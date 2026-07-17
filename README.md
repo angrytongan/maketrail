@@ -14,4 +14,4 @@ npm run lint        # lint
 npm run typecheck   # type-check
 ```
 
-Currently a spike: mock survey points → local meters → triangulated mesh → rendered in Three.js, with parametric roller/berm/kicker obstacles you can add, select, drag to move, and drag-handle to rotate in the 2D Plan View — the 3D view updates live. Elevation auto-follows the terrain. No vertex editing, no trail marking, no real import yet — see [CLAUDE.md](CLAUDE.md) for status.
+Currently a spike: mock survey points → local meters → triangulated mesh → rendered in Three.js. The "Editor" card toggles between two modes: **Obstacles** (add/select/drag-to-move/drag-handle-to-rotate parametric roller/berm/kicker instances) and **Terrain** (a brush that raises/lowers terrain points within an adjustable radius — drag up to raise, down to lower). Both modes work in the 2D Plan View with the 3D view updating live. No trail marking, no real import yet — see [CLAUDE.md](CLAUDE.md) for status.
