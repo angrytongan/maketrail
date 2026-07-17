@@ -29,6 +29,13 @@ const ARC_SEGMENTS = 24;
  * One-way/directional per docs/decisions.md — the entry/exit arrow
  * indicator noted there isn't built yet.
  */
+/** Horizontal footprint of the ramp, per the same radius/baseLength derivation buildKickerGeometry uses. */
+export function kickerBaseLength(params: Pick<KickerParams, "height" | "lipAngle">): number {
+  const lipAngleRad = (params.lipAngle * Math.PI) / 180;
+  const radius = params.height / (1 - Math.cos(lipAngleRad));
+  return radius * Math.sin(lipAngleRad);
+}
+
 export function buildKickerGeometry(params: KickerParams): BufferGeometry {
   const { height, lipAngle, width } = params;
   const lipAngleRad = (lipAngle * Math.PI) / 180;

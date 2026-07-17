@@ -1,20 +1,27 @@
 import {
   AmbientLight,
   DirectionalLight,
+  DoubleSide,
   GridHelper,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   OrthographicCamera,
   PerspectiveCamera,
+  RingGeometry,
   Scene,
+  SphereGeometry,
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { toLocal, type GeoPoint } from "./terrain/coords";
 import { buildTerrainGeometry } from "./terrain/mesh";
-import { buildRollerGeometry } from "./obstacles/roller";
-import { buildBermGeometry } from "./obstacles/berm";
-import { buildKickerGeometry } from "./obstacles/kicker";
+import { sampleTerrainHeight } from "./terrain/sample";
+import { buildRollerGeometry, type RollerParams } from "./obstacles/roller";
+import { buildBermGeometry, type BermParams } from "./obstacles/berm";
+import { buildKickerGeometry, type KickerParams } from "./obstacles/kicker";
+import { createInstance, getFootprintRadius, type ObstacleInstance, type ObstacleType } from "./obstacles/instance";
+import { screenToWorld } from "./view2d/projection";
 
 // Mock survey data: a scattered, irregularly-spaced set of points forming a
 // gentle bump, standing in for a real GPS/lat-lon-height import.
@@ -52,35 +59,126 @@ const terrainMaterial = new MeshLambertMaterial({ color: 0x6b8f5a });
 const terrain = new Mesh(terrainGeometry, terrainMaterial);
 scene.add(terrain);
 
-// Roller obstacle: a separate object overlaid on the terrain (per
-// docs/decisions.md), not a deformation of it. Geometry is centered on its
-// own local origin (see buildRollerGeometry) so rotation pivots around the
-// obstacle's center, not a corner.
-const rollerMaterial = new MeshLambertMaterial({ color: 0xb5652d });
-const roller = new Mesh(buildRollerGeometry({ length: 3, height: 0.3, width: 1.2, periods: 1 }), rollerMaterial);
-scene.add(roller);
+scene.add(new GridHelper(20, 20));
+scene.add(new AmbientLight(0xffffff, 0.6));
+const sun = new DirectionalLight(0xffffff, 1.2);
+sun.position.set(10, 15, 5);
+scene.add(sun);
 
-function updateRoller(): void {
-  const length = Number(lengthInput.value);
-  const height = Number(heightInput.value);
-  const width = Number(widthInput.value);
-  const periods = Number(periodsInput.value);
+// --- Obstacle instances -----------------------------------------------
+// Each obstacle is a separate object overlaid on the terrain (per
+// docs/decisions.md), centered on its own local origin so position/rotation
+// pivots around its actual center. Elevation isn't stored — it's sampled
+// from the terrain each time an instance's x/z changes.
 
-  roller.geometry.dispose();
-  roller.geometry = buildRollerGeometry({ length, height, width, periods });
+const OBSTACLE_MATERIALS: Record<ObstacleType, MeshLambertMaterial> = {
+  roller: new MeshLambertMaterial({ color: 0xb5652d }),
+  berm: new MeshLambertMaterial({ color: 0x8a6bb0 }),
+  kicker: new MeshLambertMaterial({ color: 0xc94f4f }),
+};
 
-  roller.position.set(Number(posXInput.value), Number(elevationInput.value), Number(posZInput.value));
-  roller.rotation.y = (Number(rotationInput.value) * Math.PI) / 180;
-
-  lengthValue.textContent = `${length.toFixed(1)}m`;
-  heightValue.textContent = `${height.toFixed(2)}m`;
-  widthValue.textContent = `${width.toFixed(1)}m`;
-  periodsValue.textContent = `${periods}`;
-  posXValue.textContent = `${Number(posXInput.value).toFixed(1)}m`;
-  posZValue.textContent = `${Number(posZInput.value).toFixed(1)}m`;
-  elevationValue.textContent = `${Number(elevationInput.value).toFixed(1)}m`;
-  rotationValue.textContent = `${rotationInput.value}°`;
+function buildGeometryForInstance(instance: ObstacleInstance) {
+  switch (instance.type) {
+    case "roller":
+      return buildRollerGeometry(instance.params as RollerParams);
+    case "berm":
+      return buildBermGeometry(instance.params as BermParams);
+    case "kicker":
+      return buildKickerGeometry(instance.params as KickerParams);
+  }
 }
+
+const instances: ObstacleInstance[] = [];
+const meshesById = new Map<string, Mesh>();
+let selectedId: string | null = null;
+
+function findInstance(id: string): ObstacleInstance | undefined {
+  return instances.find((instance) => instance.id === id);
+}
+
+function repositionMesh(instance: ObstacleInstance): void {
+  const mesh = meshesById.get(instance.id);
+  if (!mesh) return;
+  const elevation = sampleTerrainHeight(localPoints, instance.x, instance.z);
+  mesh.position.set(instance.x, elevation, instance.z);
+  mesh.rotation.y = instance.rotation;
+}
+
+function rebuildInstanceGeometry(instance: ObstacleInstance): void {
+  const mesh = meshesById.get(instance.id);
+  if (!mesh) return;
+  mesh.geometry.dispose();
+  mesh.geometry = buildGeometryForInstance(instance);
+}
+
+function addObstacle(type: ObstacleType): void {
+  const spawnIndex = instances.length;
+  const x = (spawnIndex % 5) * 3 - 6;
+  const z = Math.floor(spawnIndex / 5) * 3 - 6;
+  const instance = createInstance(type, x, z);
+  instances.push(instance);
+
+  const mesh = new Mesh(buildGeometryForInstance(instance), OBSTACLE_MATERIALS[type]);
+  scene.add(mesh);
+  meshesById.set(instance.id, mesh);
+  repositionMesh(instance);
+
+  selectInstance(instance.id);
+}
+
+function removeSelected(): void {
+  if (!selectedId) return;
+  const mesh = meshesById.get(selectedId);
+  if (mesh) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    meshesById.delete(selectedId);
+  }
+  const index = instances.findIndex((instance) => instance.id === selectedId);
+  if (index !== -1) instances.splice(index, 1);
+  selectInstance(null);
+}
+
+// --- Selection visuals (shared across both views) -----------------------
+
+const selectionRing = new Mesh(new RingGeometry(0.92, 1, 32), new MeshBasicMaterial({ color: 0xffe066, side: DoubleSide }));
+selectionRing.rotation.x = -Math.PI / 2;
+selectionRing.visible = false;
+scene.add(selectionRing);
+
+const rotateHandle = new Mesh(new SphereGeometry(0.15, 12, 12), new MeshBasicMaterial({ color: 0xffe066 }));
+rotateHandle.visible = false;
+scene.add(rotateHandle);
+
+function updateSelectionVisuals(instance: ObstacleInstance): void {
+  const mesh = meshesById.get(instance.id);
+  if (!mesh) return;
+  const radius = getFootprintRadius(instance);
+
+  selectionRing.visible = true;
+  selectionRing.position.set(instance.x, mesh.position.y + 0.02, instance.z);
+  selectionRing.scale.setScalar(radius);
+
+  const handleDistance = radius + 0.6;
+  rotateHandle.visible = true;
+  rotateHandle.position.set(
+    instance.x + handleDistance * Math.cos(instance.rotation),
+    mesh.position.y + 0.3,
+    instance.z - handleDistance * Math.sin(instance.rotation),
+  );
+}
+
+// --- Per-type control panels ---------------------------------------------
+// Only the panel matching the selected instance's type is shown. Sliders
+// both write into the selected instance (on 'input') and get resynced from
+// it (after a drag/rotate on the 2D canvas), so they always reflect
+// whichever instance is currently selected.
+
+const rollerPanel = document.querySelector<HTMLDivElement>("#roller-panel")!;
+const bermPanel = document.querySelector<HTMLDivElement>("#berm-panel")!;
+const kickerPanel = document.querySelector<HTMLDivElement>("#kicker-panel")!;
+const noSelectionHint = document.querySelector<HTMLDivElement>("#no-selection-hint")!;
+const removeButton = document.querySelector<HTMLButtonElement>("#remove-selected-btn")!;
 
 const lengthInput = document.querySelector<HTMLInputElement>("#roller-length")!;
 const heightInput = document.querySelector<HTMLInputElement>("#roller-height")!;
@@ -88,7 +186,6 @@ const widthInput = document.querySelector<HTMLInputElement>("#roller-width")!;
 const periodsInput = document.querySelector<HTMLInputElement>("#roller-periods")!;
 const posXInput = document.querySelector<HTMLInputElement>("#roller-pos-x")!;
 const posZInput = document.querySelector<HTMLInputElement>("#roller-pos-z")!;
-const elevationInput = document.querySelector<HTMLInputElement>("#roller-elevation")!;
 const rotationInput = document.querySelector<HTMLInputElement>("#roller-rotation")!;
 const lengthValue = document.querySelector<HTMLSpanElement>("#roller-length-value")!;
 const heightValue = document.querySelector<HTMLSpanElement>("#roller-height-value")!;
@@ -96,41 +193,7 @@ const widthValue = document.querySelector<HTMLSpanElement>("#roller-width-value"
 const periodsValue = document.querySelector<HTMLSpanElement>("#roller-periods-value")!;
 const posXValue = document.querySelector<HTMLSpanElement>("#roller-pos-x-value")!;
 const posZValue = document.querySelector<HTMLSpanElement>("#roller-pos-z-value")!;
-const elevationValue = document.querySelector<HTMLSpanElement>("#roller-elevation-value")!;
 const rotationValue = document.querySelector<HTMLSpanElement>("#roller-rotation-value")!;
-
-for (const input of [lengthInput, heightInput, widthInput, periodsInput, posXInput, posZInput, elevationInput, rotationInput]) {
-  input.addEventListener("input", updateRoller);
-}
-updateRoller();
-
-// Berm obstacle: same "separate object overlaid on terrain, centered on its
-// own local origin" convention as the roller (see buildBermGeometry).
-const bermMaterial = new MeshLambertMaterial({ color: 0x8a6bb0 });
-const berm = new Mesh(buildBermGeometry({ radius: 4, sweepAngle: 90, bankAngle: 35, width: 2 }), bermMaterial);
-scene.add(berm);
-
-function updateBerm(): void {
-  const radius = Number(bermRadiusInput.value);
-  const sweepAngle = Number(bermSweepInput.value);
-  const bankAngle = Number(bermBankInput.value);
-  const width = Number(bermWidthInput.value);
-
-  berm.geometry.dispose();
-  berm.geometry = buildBermGeometry({ radius, sweepAngle, bankAngle, width });
-
-  berm.position.set(Number(bermPosXInput.value), Number(bermElevationInput.value), Number(bermPosZInput.value));
-  berm.rotation.y = (Number(bermRotationInput.value) * Math.PI) / 180;
-
-  bermRadiusValue.textContent = `${radius.toFixed(1)}m`;
-  bermSweepValue.textContent = `${sweepAngle}°`;
-  bermBankValue.textContent = `${bankAngle}°`;
-  bermWidthValue.textContent = `${width.toFixed(1)}m`;
-  bermPosXValue.textContent = `${Number(bermPosXInput.value).toFixed(1)}m`;
-  bermPosZValue.textContent = `${Number(bermPosZInput.value).toFixed(1)}m`;
-  bermElevationValue.textContent = `${Number(bermElevationInput.value).toFixed(1)}m`;
-  bermRotationValue.textContent = `${bermRotationInput.value}°`;
-}
 
 const bermRadiusInput = document.querySelector<HTMLInputElement>("#berm-radius")!;
 const bermSweepInput = document.querySelector<HTMLInputElement>("#berm-sweep")!;
@@ -138,7 +201,6 @@ const bermBankInput = document.querySelector<HTMLInputElement>("#berm-bank")!;
 const bermWidthInput = document.querySelector<HTMLInputElement>("#berm-width")!;
 const bermPosXInput = document.querySelector<HTMLInputElement>("#berm-pos-x")!;
 const bermPosZInput = document.querySelector<HTMLInputElement>("#berm-pos-z")!;
-const bermElevationInput = document.querySelector<HTMLInputElement>("#berm-elevation")!;
 const bermRotationInput = document.querySelector<HTMLInputElement>("#berm-rotation")!;
 const bermRadiusValue = document.querySelector<HTMLSpanElement>("#berm-radius-value")!;
 const bermSweepValue = document.querySelector<HTMLSpanElement>("#berm-sweep-value")!;
@@ -146,83 +208,176 @@ const bermBankValue = document.querySelector<HTMLSpanElement>("#berm-bank-value"
 const bermWidthValue = document.querySelector<HTMLSpanElement>("#berm-width-value")!;
 const bermPosXValue = document.querySelector<HTMLSpanElement>("#berm-pos-x-value")!;
 const bermPosZValue = document.querySelector<HTMLSpanElement>("#berm-pos-z-value")!;
-const bermElevationValue = document.querySelector<HTMLSpanElement>("#berm-elevation-value")!;
 const bermRotationValue = document.querySelector<HTMLSpanElement>("#berm-rotation-value")!;
-
-for (const input of [
-  bermRadiusInput,
-  bermSweepInput,
-  bermBankInput,
-  bermWidthInput,
-  bermPosXInput,
-  bermPosZInput,
-  bermElevationInput,
-  bermRotationInput,
-]) {
-  input.addEventListener("input", updateBerm);
-}
-updateBerm();
-
-// Kicker obstacle: same overlaid-on-terrain convention as the roller/berm.
-// X is centered but Y stays anchored at 0 for the base (see
-// buildKickerGeometry) since a kicker is inherently asymmetric.
-const kickerMaterial = new MeshLambertMaterial({ color: 0xc94f4f });
-const kicker = new Mesh(buildKickerGeometry({ height: 0.5, lipAngle: 25, width: 1.2 }), kickerMaterial);
-scene.add(kicker);
-
-function updateKicker(): void {
-  const height = Number(kickerHeightInput.value);
-  const lipAngle = Number(kickerLipAngleInput.value);
-  const width = Number(kickerWidthInput.value);
-
-  kicker.geometry.dispose();
-  kicker.geometry = buildKickerGeometry({ height, lipAngle, width });
-
-  kicker.position.set(Number(kickerPosXInput.value), Number(kickerElevationInput.value), Number(kickerPosZInput.value));
-  kicker.rotation.y = (Number(kickerRotationInput.value) * Math.PI) / 180;
-
-  kickerHeightValue.textContent = `${height.toFixed(2)}m`;
-  kickerLipAngleValue.textContent = `${lipAngle}°`;
-  kickerWidthValue.textContent = `${width.toFixed(1)}m`;
-  kickerPosXValue.textContent = `${Number(kickerPosXInput.value).toFixed(1)}m`;
-  kickerPosZValue.textContent = `${Number(kickerPosZInput.value).toFixed(1)}m`;
-  kickerElevationValue.textContent = `${Number(kickerElevationInput.value).toFixed(1)}m`;
-  kickerRotationValue.textContent = `${kickerRotationInput.value}°`;
-}
 
 const kickerHeightInput = document.querySelector<HTMLInputElement>("#kicker-height")!;
 const kickerLipAngleInput = document.querySelector<HTMLInputElement>("#kicker-lip-angle")!;
 const kickerWidthInput = document.querySelector<HTMLInputElement>("#kicker-width")!;
 const kickerPosXInput = document.querySelector<HTMLInputElement>("#kicker-pos-x")!;
 const kickerPosZInput = document.querySelector<HTMLInputElement>("#kicker-pos-z")!;
-const kickerElevationInput = document.querySelector<HTMLInputElement>("#kicker-elevation")!;
 const kickerRotationInput = document.querySelector<HTMLInputElement>("#kicker-rotation")!;
 const kickerHeightValue = document.querySelector<HTMLSpanElement>("#kicker-height-value")!;
 const kickerLipAngleValue = document.querySelector<HTMLSpanElement>("#kicker-lip-angle-value")!;
 const kickerWidthValue = document.querySelector<HTMLSpanElement>("#kicker-width-value")!;
 const kickerPosXValue = document.querySelector<HTMLSpanElement>("#kicker-pos-x-value")!;
 const kickerPosZValue = document.querySelector<HTMLSpanElement>("#kicker-pos-z-value")!;
-const kickerElevationValue = document.querySelector<HTMLSpanElement>("#kicker-elevation-value")!;
 const kickerRotationValue = document.querySelector<HTMLSpanElement>("#kicker-rotation-value")!;
 
-for (const input of [
-  kickerHeightInput,
-  kickerLipAngleInput,
-  kickerWidthInput,
-  kickerPosXInput,
-  kickerPosZInput,
-  kickerElevationInput,
-  kickerRotationInput,
-]) {
-  input.addEventListener("input", updateKicker);
+function rotationDegrees(instance: ObstacleInstance): number {
+  return Math.round((((instance.rotation * 180) / Math.PI) % 360) + 360) % 360;
 }
-updateKicker();
 
-scene.add(new GridHelper(20, 20));
-scene.add(new AmbientLight(0xffffff, 0.6));
-const sun = new DirectionalLight(0xffffff, 1.2);
-sun.position.set(10, 15, 5);
-scene.add(sun);
+function syncRollerPanel(instance: ObstacleInstance): void {
+  const p = instance.params as RollerParams;
+  lengthInput.value = String(p.length);
+  heightInput.value = String(p.height);
+  widthInput.value = String(p.width);
+  periodsInput.value = String(p.periods);
+  posXInput.value = String(instance.x);
+  posZInput.value = String(instance.z);
+  rotationInput.value = String(rotationDegrees(instance));
+
+  lengthValue.textContent = `${p.length.toFixed(1)}m`;
+  heightValue.textContent = `${p.height.toFixed(2)}m`;
+  widthValue.textContent = `${p.width.toFixed(1)}m`;
+  periodsValue.textContent = `${p.periods}`;
+  posXValue.textContent = `${instance.x.toFixed(1)}m`;
+  posZValue.textContent = `${instance.z.toFixed(1)}m`;
+  rotationValue.textContent = `${rotationInput.value}°`;
+}
+
+function syncBermPanel(instance: ObstacleInstance): void {
+  const p = instance.params as BermParams;
+  bermRadiusInput.value = String(p.radius);
+  bermSweepInput.value = String(p.sweepAngle);
+  bermBankInput.value = String(p.bankAngle);
+  bermWidthInput.value = String(p.width);
+  bermPosXInput.value = String(instance.x);
+  bermPosZInput.value = String(instance.z);
+  bermRotationInput.value = String(rotationDegrees(instance));
+
+  bermRadiusValue.textContent = `${p.radius.toFixed(1)}m`;
+  bermSweepValue.textContent = `${p.sweepAngle}°`;
+  bermBankValue.textContent = `${p.bankAngle}°`;
+  bermWidthValue.textContent = `${p.width.toFixed(1)}m`;
+  bermPosXValue.textContent = `${instance.x.toFixed(1)}m`;
+  bermPosZValue.textContent = `${instance.z.toFixed(1)}m`;
+  bermRotationValue.textContent = `${bermRotationInput.value}°`;
+}
+
+function syncKickerPanel(instance: ObstacleInstance): void {
+  const p = instance.params as KickerParams;
+  kickerHeightInput.value = String(p.height);
+  kickerLipAngleInput.value = String(p.lipAngle);
+  kickerWidthInput.value = String(p.width);
+  kickerPosXInput.value = String(instance.x);
+  kickerPosZInput.value = String(instance.z);
+  kickerRotationInput.value = String(rotationDegrees(instance));
+
+  kickerHeightValue.textContent = `${p.height.toFixed(2)}m`;
+  kickerLipAngleValue.textContent = `${p.lipAngle}°`;
+  kickerWidthValue.textContent = `${p.width.toFixed(1)}m`;
+  kickerPosXValue.textContent = `${instance.x.toFixed(1)}m`;
+  kickerPosZValue.textContent = `${instance.z.toFixed(1)}m`;
+  kickerRotationValue.textContent = `${kickerRotationInput.value}°`;
+}
+
+function syncPanel(instance: ObstacleInstance): void {
+  if (instance.type === "roller") syncRollerPanel(instance);
+  else if (instance.type === "berm") syncBermPanel(instance);
+  else syncKickerPanel(instance);
+}
+
+function selectInstance(id: string | null): void {
+  selectedId = id;
+  const instance = id ? findInstance(id) : undefined;
+
+  rollerPanel.style.display = instance?.type === "roller" ? "" : "none";
+  bermPanel.style.display = instance?.type === "berm" ? "" : "none";
+  kickerPanel.style.display = instance?.type === "kicker" ? "" : "none";
+  noSelectionHint.style.display = instance ? "none" : "";
+  removeButton.disabled = !instance;
+
+  if (instance) {
+    syncPanel(instance);
+    updateSelectionVisuals(instance);
+  } else {
+    selectionRing.visible = false;
+    rotateHandle.visible = false;
+  }
+}
+
+function applyRollerInput(): void {
+  const instance = selectedId ? findInstance(selectedId) : undefined;
+  if (!instance || instance.type !== "roller") return;
+  const p = instance.params as RollerParams;
+  p.length = Number(lengthInput.value);
+  p.height = Number(heightInput.value);
+  p.width = Number(widthInput.value);
+  p.periods = Number(periodsInput.value);
+  instance.x = Number(posXInput.value);
+  instance.z = Number(posZInput.value);
+  instance.rotation = (Number(rotationInput.value) * Math.PI) / 180;
+
+  rebuildInstanceGeometry(instance);
+  repositionMesh(instance);
+  updateSelectionVisuals(instance);
+  syncPanel(instance);
+}
+
+function applyBermInput(): void {
+  const instance = selectedId ? findInstance(selectedId) : undefined;
+  if (!instance || instance.type !== "berm") return;
+  const p = instance.params as BermParams;
+  p.radius = Number(bermRadiusInput.value);
+  p.sweepAngle = Number(bermSweepInput.value);
+  p.bankAngle = Number(bermBankInput.value);
+  p.width = Number(bermWidthInput.value);
+  instance.x = Number(bermPosXInput.value);
+  instance.z = Number(bermPosZInput.value);
+  instance.rotation = (Number(bermRotationInput.value) * Math.PI) / 180;
+
+  rebuildInstanceGeometry(instance);
+  repositionMesh(instance);
+  updateSelectionVisuals(instance);
+  syncPanel(instance);
+}
+
+function applyKickerInput(): void {
+  const instance = selectedId ? findInstance(selectedId) : undefined;
+  if (!instance || instance.type !== "kicker") return;
+  const p = instance.params as KickerParams;
+  p.height = Number(kickerHeightInput.value);
+  p.lipAngle = Number(kickerLipAngleInput.value);
+  p.width = Number(kickerWidthInput.value);
+  instance.x = Number(kickerPosXInput.value);
+  instance.z = Number(kickerPosZInput.value);
+  instance.rotation = (Number(kickerRotationInput.value) * Math.PI) / 180;
+
+  rebuildInstanceGeometry(instance);
+  repositionMesh(instance);
+  updateSelectionVisuals(instance);
+  syncPanel(instance);
+}
+
+for (const input of [lengthInput, heightInput, widthInput, periodsInput, posXInput, posZInput, rotationInput]) {
+  input.addEventListener("input", applyRollerInput);
+}
+for (const input of [bermRadiusInput, bermSweepInput, bermBankInput, bermWidthInput, bermPosXInput, bermPosZInput, bermRotationInput]) {
+  input.addEventListener("input", applyBermInput);
+}
+for (const input of [kickerHeightInput, kickerLipAngleInput, kickerWidthInput, kickerPosXInput, kickerPosZInput, kickerRotationInput]) {
+  input.addEventListener("input", applyKickerInput);
+}
+
+document.querySelector<HTMLButtonElement>("#add-roller-btn")!.addEventListener("click", () => addObstacle("roller"));
+document.querySelector<HTMLButtonElement>("#add-berm-btn")!.addEventListener("click", () => addObstacle("berm"));
+document.querySelector<HTMLButtonElement>("#add-kicker-btn")!.addEventListener("click", () => addObstacle("kicker"));
+removeButton.addEventListener("click", removeSelected);
+
+selectInstance(null);
+
+// --- Views ---------------------------------------------------------------
 
 const view3dBody = document.querySelector<HTMLDivElement>("#view-3d-body")!;
 const view2dBody = document.querySelector<HTMLDivElement>("#view-2d-body")!;
@@ -238,9 +393,9 @@ const controls = new OrbitControls(camera3d, renderer3d.domElement);
 controls.target.set(0, 0, 0);
 
 // 2D top-down view: an orthographic camera looking straight down at the same
-// scene. Static for now — a preview of the card layout, not the real
-// interactive 2D editor (vertex editing, obstacle placement) planned in
-// docs/decisions.md.
+// scene, and the interactive surface for selecting/moving/rotating
+// obstacles (per docs/decisions.md's 2D-only editing decision). Vertex
+// editing and trail marking aren't built yet.
 const PLAN_VIEW_EXTENT = 12;
 const camera2d = new OrthographicCamera(-PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, -PLAN_VIEW_EXTENT, 0.1, 100);
 camera2d.position.set(0, 50, 0);
@@ -274,6 +429,78 @@ const resizeObserver = new ResizeObserver(() => {
 });
 resizeObserver.observe(view3dBody);
 resizeObserver.observe(view2dBody);
+
+// --- 2D view interaction: select, drag-to-move, drag-handle-to-rotate ----
+
+const HANDLE_HIT_RADIUS = 0.5;
+
+function canvasEventToWorld(event: PointerEvent): { x: number; z: number } {
+  const rect = renderer2d.domElement.getBoundingClientRect();
+  const px = event.clientX - rect.left;
+  const py = event.clientY - rect.top;
+  return screenToWorld(px, py, rect.width, rect.height, camera2d.left, camera2d.right, camera2d.top, camera2d.bottom);
+}
+
+function findInstanceAt(worldX: number, worldZ: number): ObstacleInstance | undefined {
+  return instances.find((instance) => {
+    const r = getFootprintRadius(instance);
+    const dx = instance.x - worldX;
+    const dz = instance.z - worldZ;
+    return dx * dx + dz * dz <= r * r;
+  });
+}
+
+function isNearHandle(instance: ObstacleInstance, worldX: number, worldZ: number): boolean {
+  const r = getFootprintRadius(instance) + 0.6;
+  const handleX = instance.x + r * Math.cos(instance.rotation);
+  const handleZ = instance.z - r * Math.sin(instance.rotation);
+  const dx = handleX - worldX;
+  const dz = handleZ - worldZ;
+  return dx * dx + dz * dz <= HANDLE_HIT_RADIUS * HANDLE_HIT_RADIUS;
+}
+
+type DragMode = { kind: "move" | "rotate"; instanceId: string } | null;
+let dragMode: DragMode = null;
+
+renderer2d.domElement.addEventListener("pointerdown", (event) => {
+  const { x, z } = canvasEventToWorld(event);
+  const selected = selectedId ? findInstance(selectedId) : undefined;
+
+  if (selected && isNearHandle(selected, x, z)) {
+    dragMode = { kind: "rotate", instanceId: selected.id };
+    return;
+  }
+
+  const hit = findInstanceAt(x, z);
+  if (hit) {
+    selectInstance(hit.id);
+    dragMode = { kind: "move", instanceId: hit.id };
+  } else {
+    selectInstance(null);
+  }
+});
+
+renderer2d.domElement.addEventListener("pointermove", (event) => {
+  if (!dragMode) return;
+  const instance = findInstance(dragMode.instanceId);
+  if (!instance) return;
+  const { x, z } = canvasEventToWorld(event);
+
+  if (dragMode.kind === "move") {
+    instance.x = x;
+    instance.z = z;
+  } else {
+    instance.rotation = Math.atan2(-(z - instance.z), x - instance.x);
+  }
+
+  repositionMesh(instance);
+  updateSelectionVisuals(instance);
+  syncPanel(instance);
+});
+
+window.addEventListener("pointerup", () => {
+  dragMode = null;
+});
 
 function animate() {
   requestAnimationFrame(animate);
