@@ -686,6 +686,11 @@ function setEditMode(mode: EditMode): void {
   if (mode !== "obstacles") selectInstance(null);
   if (mode !== "terrain") resetBrushHighlight();
   if (mode !== "trail") selectWaypoint(null);
+
+  // selectInstance(null) above sets this visible (no selection), but it's an
+  // obstacles-mode-only hint — override so it doesn't linger in the other
+  // two modes.
+  noSelectionHint.style.display = mode === "obstacles" && !selectedId ? "" : "none";
 }
 
 modeObstaclesBtn.addEventListener("click", () => setEditMode("obstacles"));
