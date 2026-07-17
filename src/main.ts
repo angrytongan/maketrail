@@ -348,43 +348,31 @@ const lengthInput = document.querySelector<HTMLInputElement>("#roller-length")!;
 const heightInput = document.querySelector<HTMLInputElement>("#roller-height")!;
 const widthInput = document.querySelector<HTMLInputElement>("#roller-width")!;
 const periodsInput = document.querySelector<HTMLInputElement>("#roller-periods")!;
-const posXInput = document.querySelector<HTMLInputElement>("#roller-pos-x")!;
-const posZInput = document.querySelector<HTMLInputElement>("#roller-pos-z")!;
 const rotationInput = document.querySelector<HTMLInputElement>("#roller-rotation")!;
 const lengthValue = document.querySelector<HTMLSpanElement>("#roller-length-value")!;
 const heightValue = document.querySelector<HTMLSpanElement>("#roller-height-value")!;
 const widthValue = document.querySelector<HTMLSpanElement>("#roller-width-value")!;
 const periodsValue = document.querySelector<HTMLSpanElement>("#roller-periods-value")!;
-const posXValue = document.querySelector<HTMLSpanElement>("#roller-pos-x-value")!;
-const posZValue = document.querySelector<HTMLSpanElement>("#roller-pos-z-value")!;
 const rotationValue = document.querySelector<HTMLSpanElement>("#roller-rotation-value")!;
 
 const bermRadiusInput = document.querySelector<HTMLInputElement>("#berm-radius")!;
 const bermSweepInput = document.querySelector<HTMLInputElement>("#berm-sweep")!;
 const bermBankInput = document.querySelector<HTMLInputElement>("#berm-bank")!;
 const bermWidthInput = document.querySelector<HTMLInputElement>("#berm-width")!;
-const bermPosXInput = document.querySelector<HTMLInputElement>("#berm-pos-x")!;
-const bermPosZInput = document.querySelector<HTMLInputElement>("#berm-pos-z")!;
 const bermRotationInput = document.querySelector<HTMLInputElement>("#berm-rotation")!;
 const bermRadiusValue = document.querySelector<HTMLSpanElement>("#berm-radius-value")!;
 const bermSweepValue = document.querySelector<HTMLSpanElement>("#berm-sweep-value")!;
 const bermBankValue = document.querySelector<HTMLSpanElement>("#berm-bank-value")!;
 const bermWidthValue = document.querySelector<HTMLSpanElement>("#berm-width-value")!;
-const bermPosXValue = document.querySelector<HTMLSpanElement>("#berm-pos-x-value")!;
-const bermPosZValue = document.querySelector<HTMLSpanElement>("#berm-pos-z-value")!;
 const bermRotationValue = document.querySelector<HTMLSpanElement>("#berm-rotation-value")!;
 
 const kickerHeightInput = document.querySelector<HTMLInputElement>("#kicker-height")!;
 const kickerLipAngleInput = document.querySelector<HTMLInputElement>("#kicker-lip-angle")!;
 const kickerWidthInput = document.querySelector<HTMLInputElement>("#kicker-width")!;
-const kickerPosXInput = document.querySelector<HTMLInputElement>("#kicker-pos-x")!;
-const kickerPosZInput = document.querySelector<HTMLInputElement>("#kicker-pos-z")!;
 const kickerRotationInput = document.querySelector<HTMLInputElement>("#kicker-rotation")!;
 const kickerHeightValue = document.querySelector<HTMLSpanElement>("#kicker-height-value")!;
 const kickerLipAngleValue = document.querySelector<HTMLSpanElement>("#kicker-lip-angle-value")!;
 const kickerWidthValue = document.querySelector<HTMLSpanElement>("#kicker-width-value")!;
-const kickerPosXValue = document.querySelector<HTMLSpanElement>("#kicker-pos-x-value")!;
-const kickerPosZValue = document.querySelector<HTMLSpanElement>("#kicker-pos-z-value")!;
 const kickerRotationValue = document.querySelector<HTMLSpanElement>("#kicker-rotation-value")!;
 
 function rotationDegrees(instance: ObstacleInstance): number {
@@ -397,16 +385,12 @@ function syncRollerPanel(instance: ObstacleInstance): void {
   heightInput.value = String(p.height);
   widthInput.value = String(p.width);
   periodsInput.value = String(p.periods);
-  posXInput.value = String(instance.x);
-  posZInput.value = String(instance.z);
   rotationInput.value = String(rotationDegrees(instance));
 
   lengthValue.textContent = `${p.length.toFixed(1)}m`;
   heightValue.textContent = `${p.height.toFixed(2)}m`;
   widthValue.textContent = `${p.width.toFixed(1)}m`;
   periodsValue.textContent = `${p.periods}`;
-  posXValue.textContent = `${instance.x.toFixed(1)}m`;
-  posZValue.textContent = `${instance.z.toFixed(1)}m`;
   rotationValue.textContent = `${rotationInput.value}°`;
 }
 
@@ -416,16 +400,12 @@ function syncBermPanel(instance: ObstacleInstance): void {
   bermSweepInput.value = String(p.sweepAngle);
   bermBankInput.value = String(p.bankAngle);
   bermWidthInput.value = String(p.width);
-  bermPosXInput.value = String(instance.x);
-  bermPosZInput.value = String(instance.z);
   bermRotationInput.value = String(rotationDegrees(instance));
 
   bermRadiusValue.textContent = `${p.radius.toFixed(1)}m`;
   bermSweepValue.textContent = `${p.sweepAngle}°`;
   bermBankValue.textContent = `${p.bankAngle}°`;
   bermWidthValue.textContent = `${p.width.toFixed(1)}m`;
-  bermPosXValue.textContent = `${instance.x.toFixed(1)}m`;
-  bermPosZValue.textContent = `${instance.z.toFixed(1)}m`;
   bermRotationValue.textContent = `${bermRotationInput.value}°`;
 }
 
@@ -434,15 +414,11 @@ function syncKickerPanel(instance: ObstacleInstance): void {
   kickerHeightInput.value = String(p.height);
   kickerLipAngleInput.value = String(p.lipAngle);
   kickerWidthInput.value = String(p.width);
-  kickerPosXInput.value = String(instance.x);
-  kickerPosZInput.value = String(instance.z);
   kickerRotationInput.value = String(rotationDegrees(instance));
 
   kickerHeightValue.textContent = `${p.height.toFixed(2)}m`;
   kickerLipAngleValue.textContent = `${p.lipAngle}°`;
   kickerWidthValue.textContent = `${p.width.toFixed(1)}m`;
-  kickerPosXValue.textContent = `${instance.x.toFixed(1)}m`;
-  kickerPosZValue.textContent = `${instance.z.toFixed(1)}m`;
   kickerRotationValue.textContent = `${kickerRotationInput.value}°`;
 }
 
@@ -479,8 +455,6 @@ function applyRollerInput(): void {
   p.height = Number(heightInput.value);
   p.width = Number(widthInput.value);
   p.periods = Number(periodsInput.value);
-  instance.x = Number(posXInput.value);
-  instance.z = Number(posZInput.value);
   instance.rotation = (Number(rotationInput.value) * Math.PI) / 180;
 
   rebuildInstanceGeometry(instance);
@@ -497,8 +471,6 @@ function applyBermInput(): void {
   p.sweepAngle = Number(bermSweepInput.value);
   p.bankAngle = Number(bermBankInput.value);
   p.width = Number(bermWidthInput.value);
-  instance.x = Number(bermPosXInput.value);
-  instance.z = Number(bermPosZInput.value);
   instance.rotation = (Number(bermRotationInput.value) * Math.PI) / 180;
 
   rebuildInstanceGeometry(instance);
@@ -514,8 +486,6 @@ function applyKickerInput(): void {
   p.height = Number(kickerHeightInput.value);
   p.lipAngle = Number(kickerLipAngleInput.value);
   p.width = Number(kickerWidthInput.value);
-  instance.x = Number(kickerPosXInput.value);
-  instance.z = Number(kickerPosZInput.value);
   instance.rotation = (Number(kickerRotationInput.value) * Math.PI) / 180;
 
   rebuildInstanceGeometry(instance);
@@ -524,13 +494,13 @@ function applyKickerInput(): void {
   syncPanel(instance);
 }
 
-for (const input of [lengthInput, heightInput, widthInput, periodsInput, posXInput, posZInput, rotationInput]) {
+for (const input of [lengthInput, heightInput, widthInput, periodsInput, rotationInput]) {
   input.addEventListener("input", applyRollerInput);
 }
-for (const input of [bermRadiusInput, bermSweepInput, bermBankInput, bermWidthInput, bermPosXInput, bermPosZInput, bermRotationInput]) {
+for (const input of [bermRadiusInput, bermSweepInput, bermBankInput, bermWidthInput, bermRotationInput]) {
   input.addEventListener("input", applyBermInput);
 }
-for (const input of [kickerHeightInput, kickerLipAngleInput, kickerWidthInput, kickerPosXInput, kickerPosZInput, kickerRotationInput]) {
+for (const input of [kickerHeightInput, kickerLipAngleInput, kickerWidthInput, kickerRotationInput]) {
   input.addEventListener("input", applyKickerInput);
 }
 

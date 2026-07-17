@@ -19,20 +19,23 @@
         height: 100%;
         padding: 12px;
         display: grid;
-        grid-template-rows: 1fr auto;
-        gap: 12px;
-      }
-      .views {
-        display: grid;
         grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr auto;
+        grid-template-areas:
+          "view2d view3d"
+          "editor view3d";
         gap: 12px;
+      }
+      .card-2d {
+        grid-area: view2d;
         min-height: 0;
       }
-      .controls-row {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
+      .card-3d {
+        grid-area: view3d;
         min-height: 0;
+      }
+      .card-editor {
+        grid-area: editor;
       }
       .toolbar {
         display: flex;
@@ -94,20 +97,17 @@
   </head>
   <body>
     <div class="app">
-      <div class="views">
-        <div class="card">
-          <div class="card-header">2D Plan View</div>
-          <div class="card-body" id="view-2d-body"></div>
-        </div>
-        <div class="card">
-          <div class="card-header">3D View</div>
-          <div class="card-body" id="view-3d-body"></div>
-        </div>
+      <div class="card card-2d">
+        <div class="card-header">2D Plan View</div>
+        <div class="card-body" id="view-2d-body"></div>
+      </div>
+      <div class="card card-3d">
+        <div class="card-header">3D View</div>
+        <div class="card-body" id="view-3d-body"></div>
       </div>
 
-      <div class="controls-row">
-        <div class="card">
-          <div class="card-header toolbar">
+      <div class="card card-editor">
+        <div class="card-header toolbar">
             <span>Editor</span>
             <button id="mode-obstacles-btn" type="button" class="active">Obstacles</button>
             <button id="mode-terrain-btn" type="button">Terrain</button>
@@ -155,14 +155,6 @@
             <input type="range" id="roller-periods" min="1" max="6" step="1" value="1" />
             <span id="roller-periods-value"></span>
 
-            <label for="roller-pos-x">Position X</label>
-            <input type="range" id="roller-pos-x" min="-9" max="9" step="0.1" value="0" />
-            <span id="roller-pos-x-value"></span>
-
-            <label for="roller-pos-z">Position Z</label>
-            <input type="range" id="roller-pos-z" min="-9" max="9" step="0.1" value="0" />
-            <span id="roller-pos-z-value"></span>
-
             <label for="roller-rotation">Rotation</label>
             <input type="range" id="roller-rotation" min="0" max="359" step="1" value="0" />
             <span id="roller-rotation-value"></span>
@@ -185,14 +177,6 @@
             <input type="range" id="berm-width" min="1" max="4" step="0.1" value="2" />
             <span id="berm-width-value"></span>
 
-            <label for="berm-pos-x">Position X</label>
-            <input type="range" id="berm-pos-x" min="-9" max="9" step="0.1" value="-4" />
-            <span id="berm-pos-x-value"></span>
-
-            <label for="berm-pos-z">Position Z</label>
-            <input type="range" id="berm-pos-z" min="-9" max="9" step="0.1" value="-4" />
-            <span id="berm-pos-z-value"></span>
-
             <label for="berm-rotation">Rotation</label>
             <input type="range" id="berm-rotation" min="0" max="359" step="1" value="0" />
             <span id="berm-rotation-value"></span>
@@ -211,20 +195,11 @@
             <input type="range" id="kicker-width" min="0.5" max="3" step="0.1" value="1.2" />
             <span id="kicker-width-value"></span>
 
-            <label for="kicker-pos-x">Position X</label>
-            <input type="range" id="kicker-pos-x" min="-9" max="9" step="0.1" value="4" />
-            <span id="kicker-pos-x-value"></span>
-
-            <label for="kicker-pos-z">Position Z</label>
-            <input type="range" id="kicker-pos-z" min="-9" max="9" step="0.1" value="-4" />
-            <span id="kicker-pos-z-value"></span>
-
             <label for="kicker-rotation">Rotation</label>
             <input type="range" id="kicker-rotation" min="0" max="359" step="1" value="0" />
             <span id="kicker-rotation-value"></span>
           </div>
         </div>
-      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
