@@ -26,6 +26,12 @@ Not-yet-built features and known gaps. Check [docs/decisions.md](decisions.md) f
 - [ ] Resizable panes — the 2D/3D/Editor card grid (`index.html`'s `.app`, `grid-template-areas`) has fixed column/row proportions; no way to drag a divider to resize.
 - [ ] Fix the Editor card's height so it doesn't change size as different obstacle panels (roller/berm/kicker) or modes (obstacles/terrain) show different numbers of controls — its grid row is currently `auto`, so switching panels reflows the shared row and changes the 2D view's size along with it.
 - [ ] Improve height detection and placement for obstacles — `sampleTerrainHeight` (`src/terrain/sample.ts`) is nearest-neighbor, not barycentric interpolation on the actual triangulated mesh (a known, flagged simplification), so placement can be slightly off on sparser/coarser terrain; obstacles are also placed level (Y-elevation only) rather than oriented to match local terrain slope.
+- [ ] A way to disable/hide the terrain vertex markers in the 2D view — currently they always show in Terrain mode (`vertexMarkers.visible = mode === "terrain"` in `src/main.ts`), with no option to turn them off if they're cluttering the view.
+
+## Trail
+
+- [ ] Split a trail at a waypoint — cut one continuous trail into two separate trails at a selected marker.
+- [ ] On deleting the selected waypoint, select the previous waypoint in the sequence instead of clearing selection entirely (`deleteSelectedWaypoint` in `src/main.ts` currently calls `selectWaypoint(null)`) — lets you delete several waypoints in a row without re-clicking each time.
 
 ## Difficulty / simulation
 
@@ -36,3 +42,7 @@ Not-yet-built features and known gaps. Check [docs/decisions.md](decisions.md) f
 
 - [ ] Export a build document per obstacle instance (dimensions/plans), informed by research/build-plans.md, research/jumps.md, research/berms.md, research/rollers.md.
 - [ ] Export a cut/fill diff of terrain modifications from the originally imported heightmap.
+
+## Deployment
+
+- [ ] Set up deploy to GitHub Pages — static build (`npm run build`), no backend, so should be a straightforward Actions workflow publishing `dist/`.
