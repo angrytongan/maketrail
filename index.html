@@ -111,6 +111,7 @@
             <span>Editor</span>
             <button id="mode-obstacles-btn" type="button" class="active">Obstacles</button>
             <button id="mode-terrain-btn" type="button">Terrain</button>
+            <button id="mode-trail-btn" type="button">Trail</button>
             <div class="spacer"></div>
             <button id="undo-btn" type="button" disabled title="Ctrl/Cmd+Z">Undo</button>
             <button id="redo-btn" type="button" disabled title="Ctrl/Cmd+Shift+Z">Redo</button>
@@ -133,6 +134,17 @@
             <div class="spacer"></div>
             <span style="opacity: 0.6" id="terrain-tool-hint"
               >Drag on the 2D Plan View to raise (up) / lower (down) terrain within the brush.</span
+            >
+          </div>
+
+          <div class="toolbar" id="trail-toolbar" style="display: none; padding: 8px 12px">
+            <label for="trail-width">Width</label>
+            <input type="range" id="trail-width" min="0.5" max="5" step="0.1" value="2" />
+            <span id="trail-width-value"></span>
+            <div class="spacer"></div>
+            <button id="delete-waypoint-btn" type="button" disabled>Delete waypoint</button>
+            <span style="opacity: 0.6"
+              >Click the 2D Plan View to add waypoints. Click one to select it — drag its body to move it, drag its blue handle to reshape the curve.</span
             >
           </div>
 

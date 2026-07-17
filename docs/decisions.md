@@ -15,10 +15,13 @@ Local only — browser storage plus explicit import/export of JSON files. No bac
 
 ## Trail marking
 
-- User clicks a sequence of waypoints on the 2D heightmap.
-- A spline runs through them, editable via per-point tangent handles (Bezier-style handles the user can drag), not just the waypoints themselves.
-- In the 3D view, the trail is **not** rendered as a floating spline curve — it's a distinct-colored path draped directly onto the terrain surface. The spline/handle representation is a 2D-editor-only concept.
-- The trail renders as a **ribbon with a configurable width** (not just a centerline), draped over the terrain — width default is an open question, candidate reference is the ~2m corridor in [research/pump-tracks.md](../research/pump-tracks.md).
+Implemented: `src/trail/waypoint.ts`, `src/trail/spline.ts`, `src/trail/proximity.ts` (all pure, tested), wired up in `main.ts` as a third `editMode: "trail"`.
+
+- User clicks a sequence of waypoints on the 2D heightmap (a new "Trail" mode alongside Obstacles/Terrain).
+- A cubic-Bezier spline runs through them. Each waypoint has **one** tangent handle (not two) — the handle is the outgoing control point for the segment to the next waypoint, and its mirror across the waypoint is the incoming control point for the segment from the previous one (the same "smooth point" model a vector-graphics pen tool uses). A new waypoint's handle defaults to continuing the direction of travel from the previous waypoint, fully overridable by dragging.
+- In the 3D view, the trail is **not** rendered as a separate ribbon mesh overlaid on the terrain — an initial ribbon-mesh implementation was replaced (per direct feedback) with painting the trail color directly onto the terrain's own vertex colors (`isNearTrail` checks each terrain vertex against the sampled spline centerline, nearest-neighbor style like `sampleTerrainHeight`). An overlaid mesh never quite conforms to the terrain's actual shape; tinting the terrain's own vertices always matches it exactly, with no separate geometry to keep in sync. The spline/handle representation (waypoint dots, the selected waypoint's handle) is still a 2D-editor-only concept, kept 2D-only via the same `layers` mechanism as the camera helper/terrain vertex markers.
+- The trail has a **configurable width** (not just a centerline) — default 2m, adjustable via a slider, per the ~2m corridor referenced in [research/pump-tracks.md](../research/pump-tracks.md) — used as the tint radius around the centerline rather than a mesh width.
+- Waypoints, their handles, and trail width are covered by undo/redo (see "Undo / history" below) — add/move/reshape/delete/width-change are all undoable, consistent with obstacles and terrain.
 
 ## Obstacle editing
 
@@ -67,7 +70,7 @@ Named presets (e.g. beginner/intermediate/advanced/expert, matching the difficul
 
 Implemented: an in-session undo/redo stack (`src/history/stack.ts` for the generic push/undo/redo mechanics, wired up in `main.ts`). No versioned save-point system, no persistence across page reloads.
 
-Snapshot-based, not command-based — each step is a full clone of the mutable state (obstacle instances + terrain heights), which is simplest given how little mutable state there is. Camera/view state is deliberately excluded from snapshots, so orbiting/panning is never undoable. Covers: obstacle add/remove, obstacle move/rotate (2D drag), obstacle parameter sliders, and terrain sculpt/smooth brush strokes. A whole drag or a whole slider-hold is one undo step (snapshotted at gesture start, committed at gesture end only if something actually changed), not one step per intermediate event.
+Snapshot-based, not command-based — each step is a full clone of the mutable state (obstacle instances, terrain heights, trail waypoints + width), which is simplest given how little mutable state there is. Camera/view state is deliberately excluded from snapshots, so orbiting/panning is never undoable. Covers: obstacle add/remove, obstacle move/rotate (2D drag), obstacle parameter sliders, terrain sculpt/smooth brush strokes, and trail waypoint add/move/reshape/delete + width changes. A whole drag or a whole slider-hold is one undo step (snapshotted at gesture start, committed at gesture end only if something actually changed), not one step per intermediate event.
 
 ## Real-world build output
 

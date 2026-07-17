@@ -29,6 +29,9 @@ import { buildBermGeometry, type BermParams } from "./obstacles/berm";
 import { buildKickerGeometry, type KickerParams } from "./obstacles/kicker";
 import { createInstance, getFootprintRadius, getMinY, type ObstacleInstance, type ObstacleType } from "./obstacles/instance";
 import { createHistoryStack, pushState, redoState, undoState } from "./history/stack";
+import { createWaypoint, type Waypoint } from "./trail/waypoint";
+import { sampleSpline } from "./trail/spline";
+import { isNearTrail } from "./trail/proximity";
 import { screenToWorld } from "./view2d/projection";
 
 // Mock survey data: a scattered, irregularly-spaced set of points forming a
@@ -71,6 +74,12 @@ const terrainMaterial = new MeshLambertMaterial({ vertexColors: true });
 const terrain = new Mesh(terrainGeometry, terrainMaterial);
 scene.add(terrain);
 
+// Trail color, painted directly onto terrain vertices near the trail
+// centerline rather than an overlaid ribbon mesh — an overlay never quite
+// conforms to the terrain's actual shape (visible seams/floating on slopes),
+// where tinting the terrain's own vertices always matches it exactly.
+const TRAIL_COLOR: [number, number, number] = [0.878, 0.482, 0.224]; // 0xe07b39
+
 function updateTerrainColors(): void {
   const colorAttr = terrainGeometry.getAttribute("color");
   let min = Infinity;
@@ -79,10 +88,15 @@ function updateTerrainColors(): void {
     if (p.z < min) min = p.z;
     if (p.z > max) max = p.z;
   }
-  localPoints.forEach((p, i) => colorAttr.setXYZ(i, ...heightToColor(p.z, min, max)));
+  const trailCenterline = sampleSpline(waypoints);
+  localPoints.forEach((p, i) => {
+    const color = isNearTrail(p.x, p.y, trailCenterline, trailWidth) ? TRAIL_COLOR : heightToColor(p.z, min, max);
+    colorAttr.setXYZ(i, ...color);
+  });
   colorAttr.needsUpdate = true;
 }
-updateTerrainColors();
+// Deferred to the end of the Trail marking section below, since this now
+// depends on `waypoints`/`trailWidth`, declared there.
 
 scene.add(new GridHelper(20, 20));
 scene.add(new AmbientLight(0xffffff, 0.3));
@@ -300,19 +314,26 @@ function removeSelected(): void {
 // --- Undo / redo -----------------------------------------------------
 // In-session only (per docs/decisions.md), snapshot-based rather than
 // command-based: simplest correct approach given the small amount of
-// mutable state (obstacle instances + terrain heights). Camera/view state
-// is deliberately excluded — only instances and terrain heights are part
-// of a snapshot. Multi-step gestures (a drag, a slider being held down)
-// coalesce into a single undo step by only snapshotting "before" once, at
-// gesture start, and comparing against "after" at gesture end.
+// mutable state (obstacle instances, terrain heights, trail waypoints +
+// width). Camera/view state is deliberately excluded — only that editable
+// data is part of a snapshot. Multi-step gestures (a drag, a slider being
+// held down) coalesce into a single undo step by only snapshotting "before"
+// once, at gesture start, and comparing against "after" at gesture end.
 
 interface AppState {
   instances: ObstacleInstance[];
   heights: number[];
+  waypoints: Waypoint[];
+  trailWidth: number;
 }
 
 function captureState(): AppState {
-  return { instances: structuredClone(instances), heights: localPoints.map((p) => p.z) };
+  return {
+    instances: structuredClone(instances),
+    heights: localPoints.map((p) => p.z),
+    waypoints: structuredClone(waypoints),
+    trailWidth,
+  };
 }
 
 /** Reconciles meshesById with the instances array — creates/removes/rebuilds meshes as needed. */
@@ -340,10 +361,23 @@ function syncMeshesToInstances(): void {
 function restoreState(state: AppState): void {
   instances.length = 0;
   instances.push(...structuredClone(state.instances));
+
+  // Waypoints/trailWidth must be restored *before* writeHeightsToGeometry
+  // runs below — it recolors the terrain (including the trail tint) via
+  // updateTerrainColors, which reads both.
+  waypoints.length = 0;
+  waypoints.push(...structuredClone(state.waypoints));
+  trailWidth = state.trailWidth;
+  trailWidthInput.value = String(trailWidth);
+  trailWidthValue.textContent = `${trailWidth.toFixed(1)}m`;
+
   state.heights.forEach((z, i) => (localPoints[i].z = z));
   writeHeightsToGeometry();
   syncMeshesToInstances();
   selectInstance(selectedId && findInstance(selectedId) ? selectedId : null);
+
+  syncWaypointMeshes();
+  selectWaypoint(selectedWaypointId && waypoints.some((w) => w.id === selectedWaypointId) ? selectedWaypointId : null);
 }
 
 const history = createHistoryStack<AppState>();
@@ -627,13 +661,15 @@ selectInstance(null);
 // Both target the same 2D view, so an explicit mode avoids ambiguity about
 // what a click/drag affects (docs/decisions.md).
 
-type EditMode = "obstacles" | "terrain";
+type EditMode = "obstacles" | "terrain" | "trail";
 let editMode: EditMode = "obstacles";
 
 const modeObstaclesBtn = document.querySelector<HTMLButtonElement>("#mode-obstacles-btn")!;
 const modeTerrainBtn = document.querySelector<HTMLButtonElement>("#mode-terrain-btn")!;
+const modeTrailBtn = document.querySelector<HTMLButtonElement>("#mode-trail-btn")!;
 const obstaclesToolbar = document.querySelector<HTMLDivElement>("#obstacles-toolbar")!;
 const terrainToolbar = document.querySelector<HTMLDivElement>("#terrain-toolbar")!;
+const trailToolbar = document.querySelector<HTMLDivElement>("#trail-toolbar")!;
 const brushSizeInput = document.querySelector<HTMLInputElement>("#brush-size")!;
 const brushSizeValue = document.querySelector<HTMLSpanElement>("#brush-size-value")!;
 
@@ -641,26 +677,25 @@ function setEditMode(mode: EditMode): void {
   editMode = mode;
   modeObstaclesBtn.classList.toggle("active", mode === "obstacles");
   modeTerrainBtn.classList.toggle("active", mode === "terrain");
+  modeTrailBtn.classList.toggle("active", mode === "trail");
   obstaclesToolbar.style.display = mode === "obstacles" ? "" : "none";
   terrainToolbar.style.display = mode === "terrain" ? "" : "none";
+  trailToolbar.style.display = mode === "trail" ? "" : "none";
   vertexMarkers.visible = mode === "terrain";
 
-  if (mode === "terrain") {
-    selectInstance(null);
-  } else {
-    resetBrushHighlight();
-  }
+  if (mode !== "obstacles") selectInstance(null);
+  if (mode !== "terrain") resetBrushHighlight();
+  if (mode !== "trail") selectWaypoint(null);
 }
 
 modeObstaclesBtn.addEventListener("click", () => setEditMode("obstacles"));
 modeTerrainBtn.addEventListener("click", () => setEditMode("terrain"));
+modeTrailBtn.addEventListener("click", () => setEditMode("trail"));
 brushSizeInput.addEventListener("input", () => {
   brushRadius = Number(brushSizeInput.value);
   brushSizeValue.textContent = `${brushRadius.toFixed(1)}m`;
 });
 brushSizeValue.textContent = `${brushRadius.toFixed(1)}m`;
-
-setEditMode("obstacles");
 
 // --- Terrain tool: Raise/Lower vs Smooth ---------------------------------
 
@@ -683,6 +718,152 @@ function setTerrainTool(tool: TerrainTool): void {
 
 toolSculptBtn.addEventListener("click", () => setTerrainTool("sculpt"));
 toolSmoothBtn.addEventListener("click", () => setTerrainTool("smooth"));
+
+// --- Trail marking ---------------------------------------------------------
+// Per docs/decisions.md: the trail is painted directly onto the terrain's
+// own vertex colors (see updateTerrainColors above) rather than an overlaid
+// ribbon mesh — an overlay never quite conforms to the terrain's actual
+// shape, whereas tinting the terrain's own vertices always matches it
+// exactly. The waypoint dots and each waypoint's single tangent handle are
+// still 2D-editor-only (layer 1, same mechanism as the camera helper/terrain
+// vertex markers), since the spline/handle representation is explicitly a
+// 2D-editing concept, not part of the "real" trail.
+
+const DEFAULT_TRAIL_WIDTH = 2; // metres — candidate reference: the ~2m corridor in research/pump-tracks.md
+let trailWidth = DEFAULT_TRAIL_WIDTH;
+
+const waypoints: Waypoint[] = [];
+let selectedWaypointId: string | null = null;
+
+function waypointMarkerY(x: number, z: number): number {
+  return sampleTerrainHeight(localPoints, x, z) + MARKER_Y_OFFSET;
+}
+
+const waypointMarkerGeometry = new SphereGeometry(0.18, 12, 12);
+const waypointMarkerMaterial = new MeshBasicMaterial({ color: 0xffffff });
+const waypointMeshesById = new Map<string, Mesh>();
+
+/** Reconciles waypointMeshesById with the waypoints array — mirrors syncMeshesToInstances. */
+function syncWaypointMeshes(): void {
+  const currentIds = new Set(waypoints.map((w) => w.id));
+  for (const [id, mesh] of waypointMeshesById) {
+    if (currentIds.has(id)) continue;
+    scene.remove(mesh);
+    waypointMeshesById.delete(id);
+  }
+
+  for (const wp of waypoints) {
+    let mesh = waypointMeshesById.get(wp.id);
+    if (!mesh) {
+      mesh = new Mesh(waypointMarkerGeometry, waypointMarkerMaterial);
+      mesh.layers.set(1);
+      scene.add(mesh);
+      waypointMeshesById.set(wp.id, mesh);
+    }
+    mesh.position.set(wp.x, waypointMarkerY(wp.x, wp.z), wp.z);
+  }
+}
+
+// One selection ring + one tangent-handle sphere, shown only for the
+// selected waypoint — showing every waypoint's handle at once would be
+// clutter, same reasoning as obstacles only showing rotate handles when
+// selected.
+const waypointSelectionRing = new Mesh(new RingGeometry(0.24, 0.3, 24), new MeshBasicMaterial({ color: 0xffe066, side: DoubleSide }));
+waypointSelectionRing.rotation.x = -Math.PI / 2;
+waypointSelectionRing.visible = false;
+waypointSelectionRing.layers.set(1);
+scene.add(waypointSelectionRing);
+
+const waypointHandleMesh = new Mesh(new SphereGeometry(0.15, 12, 12), new MeshBasicMaterial({ color: 0x66ccff }));
+waypointHandleMesh.visible = false;
+waypointHandleMesh.layers.set(1);
+scene.add(waypointHandleMesh);
+
+function updateWaypointSelectionVisuals(): void {
+  const wp = selectedWaypointId ? waypoints.find((w) => w.id === selectedWaypointId) : undefined;
+  if (!wp) {
+    waypointSelectionRing.visible = false;
+    waypointHandleMesh.visible = false;
+    return;
+  }
+  waypointSelectionRing.visible = true;
+  waypointSelectionRing.position.set(wp.x, waypointMarkerY(wp.x, wp.z), wp.z);
+  waypointHandleMesh.visible = true;
+  waypointHandleMesh.position.set(wp.handleX, waypointMarkerY(wp.handleX, wp.handleZ), wp.handleZ);
+}
+
+const deleteWaypointButton = document.querySelector<HTMLButtonElement>("#delete-waypoint-btn")!;
+
+function selectWaypoint(id: string | null): void {
+  selectedWaypointId = id;
+  deleteWaypointButton.disabled = !id;
+  updateWaypointSelectionVisuals();
+}
+
+function refreshTrail(): void {
+  syncWaypointMeshes();
+  updateWaypointSelectionVisuals();
+  updateTerrainColors();
+}
+
+function addWaypoint(x: number, z: number): void {
+  const wp = createWaypoint(x, z, waypoints[waypoints.length - 1]);
+  waypoints.push(wp);
+  refreshTrail();
+  selectWaypoint(wp.id);
+}
+
+function deleteSelectedWaypoint(): void {
+  if (!selectedWaypointId) return;
+  const index = waypoints.findIndex((w) => w.id === selectedWaypointId);
+  if (index !== -1) waypoints.splice(index, 1);
+  selectWaypoint(null);
+  refreshTrail();
+}
+
+const WAYPOINT_HIT_RADIUS = 0.4;
+
+function findWaypointAt(worldX: number, worldZ: number): Waypoint | undefined {
+  return waypoints.find((w) => {
+    const dx = w.x - worldX;
+    const dz = w.z - worldZ;
+    return dx * dx + dz * dz <= WAYPOINT_HIT_RADIUS * WAYPOINT_HIT_RADIUS;
+  });
+}
+
+function isNearSelectedWaypointHandle(worldX: number, worldZ: number): boolean {
+  const wp = selectedWaypointId ? waypoints.find((w) => w.id === selectedWaypointId) : undefined;
+  if (!wp) return false;
+  const dx = wp.handleX - worldX;
+  const dz = wp.handleZ - worldZ;
+  return dx * dx + dz * dz <= WAYPOINT_HIT_RADIUS * WAYPOINT_HIT_RADIUS;
+}
+
+type TrailDragMode = { kind: "move-waypoint" | "move-handle"; waypointId: string } | null;
+let trailDragMode: TrailDragMode = null;
+
+const trailWidthInput = document.querySelector<HTMLInputElement>("#trail-width")!;
+const trailWidthValue = document.querySelector<HTMLSpanElement>("#trail-width-value")!;
+
+trailWidthInput.addEventListener(
+  "input",
+  withHistory(() => {
+    trailWidth = Number(trailWidthInput.value);
+    trailWidthValue.textContent = `${trailWidth.toFixed(1)}m`;
+    updateTerrainColors();
+  }),
+);
+trailWidthInput.addEventListener("change", commitHistoryGesture);
+trailWidthValue.textContent = `${trailWidth.toFixed(1)}m`;
+
+deleteWaypointButton.addEventListener("click", () => performAtomicAction(deleteSelectedWaypoint));
+
+// Both deferred until here (rather than where each is defined) since
+// updateTerrainColors depends on waypoints/trailWidth (declared above, in
+// this section), and setEditMode's mode !== "trail" branch calls
+// selectWaypoint, which needs deleteWaypointButton (also above).
+updateTerrainColors();
+setEditMode("obstacles");
 
 // --- Views ---------------------------------------------------------------
 
@@ -716,8 +897,8 @@ scene.add(cameraHelper);
 
 // 2D top-down view: an orthographic camera looking straight down at the same
 // scene, and the interactive surface for selecting/moving/rotating
-// obstacles (per docs/decisions.md's 2D-only editing decision). Vertex
-// editing and trail marking aren't built yet.
+// obstacles, sculpting terrain, and marking the trail (per docs/decisions.md's
+// 2D-only editing decision).
 const PLAN_VIEW_EXTENT = 12;
 const camera2d = new OrthographicCamera(-PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, PLAN_VIEW_EXTENT, -PLAN_VIEW_EXTENT, 0.1, 100);
 camera2d.position.set(0, 50, 0);
@@ -813,6 +994,23 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  if (editMode === "trail") {
+    if (selectedWaypointId && isNearSelectedWaypointHandle(x, z)) {
+      trailDragMode = { kind: "move-handle", waypointId: selectedWaypointId };
+      beginHistoryGesture();
+      return;
+    }
+    const hitWaypoint = findWaypointAt(x, z);
+    if (hitWaypoint) {
+      selectWaypoint(hitWaypoint.id);
+      trailDragMode = { kind: "move-waypoint", waypointId: hitWaypoint.id };
+      beginHistoryGesture();
+    } else {
+      performAtomicAction(() => addWaypoint(x, z));
+    }
+    return;
+  }
+
   const selected = selectedId ? findInstance(selectedId) : undefined;
   if (selected) {
     const handleOffset = findGrabbedHandleOffset(selected, x, z);
@@ -856,6 +1054,23 @@ renderer2d.domElement.addEventListener("pointermove", (event) => {
     return;
   }
 
+  if (editMode === "trail") {
+    if (!trailDragMode) return;
+    const waypointId = trailDragMode.waypointId;
+    const wp = waypoints.find((w) => w.id === waypointId);
+    if (!wp) return;
+
+    if (trailDragMode.kind === "move-waypoint") {
+      wp.x = x;
+      wp.z = z;
+    } else {
+      wp.handleX = x;
+      wp.handleZ = z;
+    }
+    refreshTrail();
+    return;
+  }
+
   if (!dragMode) return;
   const instance = findInstance(dragMode.instanceId);
   if (!instance) return;
@@ -880,6 +1095,7 @@ renderer2d.domElement.addEventListener("pointerleave", () => {
 window.addEventListener("pointerup", () => {
   dragMode = null;
   terrainDrag = null;
+  trailDragMode = null;
   commitHistoryGesture();
 });
 
