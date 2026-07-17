@@ -26,7 +26,7 @@ import { getPointsInBrush } from "./terrain/brush";
 import { buildRollerGeometry, type RollerParams } from "./obstacles/roller";
 import { buildBermGeometry, type BermParams } from "./obstacles/berm";
 import { buildKickerGeometry, type KickerParams } from "./obstacles/kicker";
-import { createInstance, getFootprintRadius, type ObstacleInstance, type ObstacleType } from "./obstacles/instance";
+import { createInstance, getFootprintRadius, getMinY, type ObstacleInstance, type ObstacleType } from "./obstacles/instance";
 import { screenToWorld } from "./view2d/projection";
 
 // Mock survey data: a scattered, irregularly-spaced set of points forming a
@@ -248,7 +248,7 @@ function repositionMesh(instance: ObstacleInstance): void {
   const mesh = meshesById.get(instance.id);
   if (!mesh) return;
   const elevation = sampleTerrainHeight(localPoints, instance.x, instance.z);
-  mesh.position.set(instance.x, elevation, instance.z);
+  mesh.position.set(instance.x, elevation - getMinY(instance), instance.z);
   mesh.rotation.y = instance.rotation;
 }
 

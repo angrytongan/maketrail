@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInstance, getFootprintRadius } from "./instance";
+import { createInstance, getFootprintRadius, getMinY } from "./instance";
 import type { RollerParams } from "./roller";
 import type { BermParams } from "./berm";
 import type { KickerParams } from "./kicker";
@@ -49,5 +49,27 @@ describe("getFootprintRadius", () => {
     const radius = 0.5 / (1 - Math.cos(lipAngleRad));
     const baseLength = radius * Math.sin(lipAngleRad);
     expect(getFootprintRadius(instance)).toBeCloseTo(baseLength / 2, 6);
+  });
+});
+
+describe("getMinY", () => {
+  it("returns -height/2 for a roller (geometry is symmetric around y=0)", () => {
+    const instance = createInstance("roller", 0, 0);
+    (instance.params as RollerParams).height = 0.4;
+    expect(getMinY(instance)).toBeCloseTo(-0.2, 6);
+  });
+
+  it("returns -(width * tan(bankAngle))/2 for a berm", () => {
+    const instance = createInstance("berm", 0, 0);
+    const params = instance.params as BermParams;
+    params.width = 2;
+    params.bankAngle = 35;
+    const rise = 2 * Math.tan((35 * Math.PI) / 180);
+    expect(getMinY(instance)).toBeCloseTo(-rise / 2, 6);
+  });
+
+  it("returns 0 for a kicker (base already anchored at y=0)", () => {
+    const instance = createInstance("kicker", 0, 0);
+    expect(getMinY(instance)).toBe(0);
   });
 });

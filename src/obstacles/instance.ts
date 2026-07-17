@@ -49,3 +49,23 @@ export function getFootprintRadius(instance: ObstacleInstance): number {
     }
   }
 }
+
+/**
+ * Lowest local-Y point of an obstacle's geometry. Roller/berm geometry is
+ * built symmetric around y=0 (see their own doc comments), so placing a mesh
+ * at y=0 would sink half of it below the terrain; this offset lets callers
+ * anchor the obstacle's actual lowest point at the terrain surface instead.
+ * Kicker's base is already anchored at y=0, so its offset is 0.
+ */
+export function getMinY(instance: ObstacleInstance): number {
+  switch (instance.type) {
+    case "roller":
+      return -(instance.params as RollerParams).height / 2;
+    case "berm": {
+      const p = instance.params as BermParams;
+      return -(p.width * Math.tan((p.bankAngle * Math.PI) / 180)) / 2;
+    }
+    case "kicker":
+      return 0;
+  }
+}
