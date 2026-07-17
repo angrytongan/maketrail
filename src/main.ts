@@ -28,6 +28,7 @@ import { buildRollerGeometry, type RollerParams } from "./obstacles/roller";
 import { buildBermGeometry, type BermParams } from "./obstacles/berm";
 import { buildKickerGeometry, type KickerParams } from "./obstacles/kicker";
 import { createInstance, getFootprintRadius, getMinY, type ObstacleInstance, type ObstacleType } from "./obstacles/instance";
+import { createHistoryStack, pushState, redoState, undoState } from "./history/stack";
 import { screenToWorld } from "./view2d/projection";
 
 // Mock survey data: a scattered, irregularly-spaced set of points forming a
@@ -261,6 +262,15 @@ function rebuildInstanceGeometry(instance: ObstacleInstance): void {
   mesh.geometry = buildGeometryForInstance(instance);
 }
 
+function createMeshForInstance(instance: ObstacleInstance): Mesh {
+  const mesh = new Mesh(buildGeometryForInstance(instance), OBSTACLE_MATERIALS[instance.type]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  meshesById.set(instance.id, mesh);
+  return mesh;
+}
+
 function addObstacle(type: ObstacleType): void {
   const spawnIndex = instances.length;
   const x = (spawnIndex % 5) * 3 - 6;
@@ -268,11 +278,7 @@ function addObstacle(type: ObstacleType): void {
   const instance = createInstance(type, x, z);
   instances.push(instance);
 
-  const mesh = new Mesh(buildGeometryForInstance(instance), OBSTACLE_MATERIALS[type]);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-  meshesById.set(instance.id, mesh);
+  createMeshForInstance(instance);
   repositionMesh(instance);
 
   selectInstance(instance.id);
@@ -290,6 +296,121 @@ function removeSelected(): void {
   if (index !== -1) instances.splice(index, 1);
   selectInstance(null);
 }
+
+// --- Undo / redo -----------------------------------------------------
+// In-session only (per docs/decisions.md), snapshot-based rather than
+// command-based: simplest correct approach given the small amount of
+// mutable state (obstacle instances + terrain heights). Camera/view state
+// is deliberately excluded — only instances and terrain heights are part
+// of a snapshot. Multi-step gestures (a drag, a slider being held down)
+// coalesce into a single undo step by only snapshotting "before" once, at
+// gesture start, and comparing against "after" at gesture end.
+
+interface AppState {
+  instances: ObstacleInstance[];
+  heights: number[];
+}
+
+function captureState(): AppState {
+  return { instances: structuredClone(instances), heights: localPoints.map((p) => p.z) };
+}
+
+/** Reconciles meshesById with the instances array — creates/removes/rebuilds meshes as needed. */
+function syncMeshesToInstances(): void {
+  const currentIds = new Set(instances.map((instance) => instance.id));
+  for (const [id, mesh] of meshesById) {
+    if (currentIds.has(id)) continue;
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    meshesById.delete(id);
+  }
+
+  for (const instance of instances) {
+    const mesh = meshesById.get(instance.id);
+    if (mesh) {
+      mesh.geometry.dispose();
+      mesh.geometry = buildGeometryForInstance(instance);
+    } else {
+      createMeshForInstance(instance);
+    }
+    repositionMesh(instance);
+  }
+}
+
+function restoreState(state: AppState): void {
+  instances.length = 0;
+  instances.push(...structuredClone(state.instances));
+  state.heights.forEach((z, i) => (localPoints[i].z = z));
+  writeHeightsToGeometry();
+  syncMeshesToInstances();
+  selectInstance(selectedId && findInstance(selectedId) ? selectedId : null);
+}
+
+const history = createHistoryStack<AppState>();
+let historyBefore: AppState | null = null;
+
+const undoButton = document.querySelector<HTMLButtonElement>("#undo-btn")!;
+const redoButton = document.querySelector<HTMLButtonElement>("#redo-btn")!;
+
+function updateHistoryButtons(): void {
+  undoButton.disabled = history.undoStack.length === 0;
+  redoButton.disabled = history.redoStack.length === 0;
+}
+
+/** Pushes `before` only if the state actually changed — skips no-op clicks/drags. */
+function commitIfChanged(before: AppState): void {
+  if (JSON.stringify(before) !== JSON.stringify(captureState())) {
+    pushState(history, before);
+    updateHistoryButtons();
+  }
+}
+
+function beginHistoryGesture(): void {
+  historyBefore ??= captureState();
+}
+
+function commitHistoryGesture(): void {
+  if (historyBefore === null) return;
+  commitIfChanged(historyBefore);
+  historyBefore = null;
+}
+
+function performAtomicAction(mutate: () => void): void {
+  const before = captureState();
+  mutate();
+  commitIfChanged(before);
+}
+
+function undo(): void {
+  const prev = undoState(history, captureState());
+  if (prev === undefined) return;
+  restoreState(prev);
+  updateHistoryButtons();
+}
+
+function redo(): void {
+  const next = redoState(history, captureState());
+  if (next === undefined) return;
+  restoreState(next);
+  updateHistoryButtons();
+}
+
+undoButton.addEventListener("click", undo);
+redoButton.addEventListener("click", redo);
+window.addEventListener("keydown", (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  const key = event.key.toLowerCase();
+  if (key === "z" && event.shiftKey) {
+    event.preventDefault();
+    redo();
+  } else if (key === "z") {
+    event.preventDefault();
+    undo();
+  } else if (key === "y") {
+    event.preventDefault();
+    redo();
+  }
+});
 
 // --- Selection visuals (shared across both views) -----------------------
 
@@ -475,20 +596,30 @@ function applyKickerInput(): void {
   syncPanel(instance);
 }
 
-for (const input of [lengthInput, heightInput, widthInput, periodsInput]) {
-  input.addEventListener("input", applyRollerInput);
-}
-for (const input of [bermRadiusInput, bermSweepInput, bermBankInput, bermWidthInput]) {
-  input.addEventListener("input", applyBermInput);
-}
-for (const input of [kickerHeightInput, kickerLipAngleInput, kickerWidthInput]) {
-  input.addEventListener("input", applyKickerInput);
+function withHistory(apply: () => void): () => void {
+  return () => {
+    beginHistoryGesture();
+    apply();
+  };
 }
 
-document.querySelector<HTMLButtonElement>("#add-roller-btn")!.addEventListener("click", () => addObstacle("roller"));
-document.querySelector<HTMLButtonElement>("#add-berm-btn")!.addEventListener("click", () => addObstacle("berm"));
-document.querySelector<HTMLButtonElement>("#add-kicker-btn")!.addEventListener("click", () => addObstacle("kicker"));
-removeButton.addEventListener("click", removeSelected);
+for (const input of [lengthInput, heightInput, widthInput, periodsInput]) {
+  input.addEventListener("input", withHistory(applyRollerInput));
+  input.addEventListener("change", commitHistoryGesture);
+}
+for (const input of [bermRadiusInput, bermSweepInput, bermBankInput, bermWidthInput]) {
+  input.addEventListener("input", withHistory(applyBermInput));
+  input.addEventListener("change", commitHistoryGesture);
+}
+for (const input of [kickerHeightInput, kickerLipAngleInput, kickerWidthInput]) {
+  input.addEventListener("input", withHistory(applyKickerInput));
+  input.addEventListener("change", commitHistoryGesture);
+}
+
+document.querySelector<HTMLButtonElement>("#add-roller-btn")!.addEventListener("click", () => performAtomicAction(() => addObstacle("roller")));
+document.querySelector<HTMLButtonElement>("#add-berm-btn")!.addEventListener("click", () => performAtomicAction(() => addObstacle("berm")));
+document.querySelector<HTMLButtonElement>("#add-kicker-btn")!.addEventListener("click", () => performAtomicAction(() => addObstacle("kicker")));
+removeButton.addEventListener("click", () => performAtomicAction(removeSelected));
 
 selectInstance(null);
 
@@ -676,6 +807,7 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
 
   if (editMode === "terrain") {
     terrainDrag = { x, z, lastClientY: event.clientY };
+    beginHistoryGesture();
     if (terrainTool === "smooth") applySmoothStroke(x, z);
     updateBrushHighlight(x, z);
     return;
@@ -686,6 +818,7 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
     const handleOffset = findGrabbedHandleOffset(selected, x, z);
     if (handleOffset !== undefined) {
       dragMode = { kind: "rotate", instanceId: selected.id, handleOffset };
+      beginHistoryGesture();
       return;
     }
   }
@@ -694,6 +827,7 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
   if (hit) {
     selectInstance(hit.id);
     dragMode = { kind: "move", instanceId: hit.id };
+    beginHistoryGesture();
   } else {
     selectInstance(null);
   }
@@ -746,6 +880,7 @@ renderer2d.domElement.addEventListener("pointerleave", () => {
 window.addEventListener("pointerup", () => {
   dragMode = null;
   terrainDrag = null;
+  commitHistoryGesture();
 });
 
 function animate() {

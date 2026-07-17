@@ -65,7 +65,9 @@ Named presets (e.g. beginner/intermediate/advanced/expert, matching the difficul
 
 ## Undo / history
 
-Not needed for the prototype phase. Add an in-session undo/redo stack later if it turns out to be missed; no versioned save-point system planned.
+Implemented: an in-session undo/redo stack (`src/history/stack.ts` for the generic push/undo/redo mechanics, wired up in `main.ts`). No versioned save-point system, no persistence across page reloads.
+
+Snapshot-based, not command-based — each step is a full clone of the mutable state (obstacle instances + terrain heights), which is simplest given how little mutable state there is. Camera/view state is deliberately excluded from snapshots, so orbiting/panning is never undoable. Covers: obstacle add/remove, obstacle move/rotate (2D drag), obstacle parameter sliders, and terrain sculpt/smooth brush strokes. A whole drag or a whole slider-hold is one undo step (snapshotted at gesture start, committed at gesture end only if something actually changed), not one step per intermediate event.
 
 ## Real-world build output
 
