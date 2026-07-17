@@ -130,21 +130,52 @@ function updateBrushHighlight(worldX: number, worldZ: number): void {
   brushRing.scale.setScalar(brushRadius);
 }
 
-function applyBrushStroke(worldX: number, worldZ: number, deltaHeight: number): void {
-  const effects = getPointsInBrush(localPoints, worldX, worldZ, brushRadius);
+/** Pushes localPoints' current heights into the terrain mesh + marker geometries. */
+function writeHeightsToGeometry(): void {
   const terrainPosition = terrain.geometry.getAttribute("position");
   const markerPosition = markerGeometry.getAttribute("position");
 
-  for (const { index, weight } of effects) {
-    const newHeight = localPoints[index].z + deltaHeight * weight;
-    localPoints[index].z = newHeight;
-    terrainPosition.setY(index, newHeight);
-    markerPosition.setY(index, newHeight + MARKER_Y_OFFSET);
+  for (let i = 0; i < localPoints.length; i++) {
+    terrainPosition.setY(i, localPoints[i].z);
+    markerPosition.setY(i, localPoints[i].z + MARKER_Y_OFFSET);
   }
 
   terrainPosition.needsUpdate = true;
   markerPosition.needsUpdate = true;
   terrain.geometry.computeVertexNormals();
+}
+
+function applyBrushStroke(worldX: number, worldZ: number, deltaHeight: number): void {
+  const effects = getPointsInBrush(localPoints, worldX, worldZ, brushRadius);
+  for (const { index, weight } of effects) {
+    localPoints[index].z += deltaHeight * weight;
+  }
+  writeHeightsToGeometry();
+}
+
+// Fraction each affected point moves toward the brush area's (weighted)
+// average height, per stroke event — a standard blur/Laplacian-style
+// smoothing brush, using the brush region itself as the smoothing
+// neighborhood rather than a separate per-point neighbor search.
+const SMOOTH_STRENGTH = 0.15;
+
+function applySmoothStroke(worldX: number, worldZ: number): void {
+  const effects = getPointsInBrush(localPoints, worldX, worldZ, brushRadius);
+  if (effects.length === 0) return;
+
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const { index, weight } of effects) {
+    weightedSum += localPoints[index].z * weight;
+    weightTotal += weight;
+  }
+  const average = weightedSum / weightTotal;
+
+  for (const { index, weight } of effects) {
+    const current = localPoints[index].z;
+    localPoints[index].z = current + (average - current) * SMOOTH_STRENGTH * weight;
+  }
+  writeHeightsToGeometry();
 }
 
 // --- Obstacle instances -----------------------------------------------
@@ -498,6 +529,28 @@ brushSizeValue.textContent = `${brushRadius.toFixed(1)}m`;
 
 setEditMode("obstacles");
 
+// --- Terrain tool: Raise/Lower vs Smooth ---------------------------------
+
+type TerrainTool = "sculpt" | "smooth";
+let terrainTool: TerrainTool = "sculpt";
+
+const toolSculptBtn = document.querySelector<HTMLButtonElement>("#tool-sculpt-btn")!;
+const toolSmoothBtn = document.querySelector<HTMLButtonElement>("#tool-smooth-btn")!;
+const terrainToolHint = document.querySelector<HTMLSpanElement>("#terrain-tool-hint")!;
+
+function setTerrainTool(tool: TerrainTool): void {
+  terrainTool = tool;
+  toolSculptBtn.classList.toggle("active", tool === "sculpt");
+  toolSmoothBtn.classList.toggle("active", tool === "smooth");
+  terrainToolHint.textContent =
+    tool === "sculpt"
+      ? "Drag on the 2D Plan View to raise (up) / lower (down) terrain within the brush."
+      : "Click or drag on the 2D Plan View to smooth terrain within the brush toward its local average.";
+}
+
+toolSculptBtn.addEventListener("click", () => setTerrainTool("sculpt"));
+toolSmoothBtn.addEventListener("click", () => setTerrainTool("smooth"));
+
 // --- Views ---------------------------------------------------------------
 
 const view3dBody = document.querySelector<HTMLDivElement>("#view-3d-body")!;
@@ -600,6 +653,7 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
 
   if (editMode === "terrain") {
     terrainDrag = { x, z, lastClientY: event.clientY };
+    if (terrainTool === "smooth") applySmoothStroke(x, z);
     updateBrushHighlight(x, z);
     return;
   }
@@ -623,11 +677,19 @@ renderer2d.domElement.addEventListener("pointermove", (event) => {
   const { x, z } = canvasEventToWorld(event);
 
   if (editMode === "terrain") {
-    if (terrainDrag) {
+    if (terrainDrag && terrainTool === "sculpt") {
+      // Locked at the drag-start position — see the comment on terrainDrag:
+      // vertical mouse movement controls height, so it can't also move the
+      // brush (screen-Y maps to world Z in this top-down view).
       const deltaPixels = terrainDrag.lastClientY - event.clientY;
       applyBrushStroke(terrainDrag.x, terrainDrag.z, deltaPixels * HEIGHT_DRAG_SENSITIVITY);
       terrainDrag.lastClientY = event.clientY;
       updateBrushHighlight(terrainDrag.x, terrainDrag.z);
+    } else if (terrainDrag) {
+      // Smoothing has no such conflict, so the brush follows the live
+      // cursor — drag to sweep the smoothing effect across an area.
+      applySmoothStroke(x, z);
+      updateBrushHighlight(x, z);
     } else {
       updateBrushHighlight(x, z);
     }
