@@ -259,9 +259,21 @@ selectionRing.rotation.x = -Math.PI / 2;
 selectionRing.visible = false;
 scene.add(selectionRing);
 
-const rotateHandle = new Mesh(new SphereGeometry(0.15, 12, 12), new MeshBasicMaterial({ color: 0xffe066 }));
-rotateHandle.visible = false;
-scene.add(rotateHandle);
+// Four rotate handles (at 0/90/180/270° around the obstacle), not one —
+// a single handle can end up unreachable if it happens to land inside
+// terrain or off the visible area; having one on each side means there's
+// always a free one to grab. Dragging any of them rotates the obstacle
+// the same way (see findGrabbedHandleOffset / the pointerdown/move
+// handlers below, which track *which* handle was grabbed).
+const ROTATE_HANDLE_OFFSETS = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+const rotateHandleGeometry = new SphereGeometry(0.15, 12, 12);
+const rotateHandleMaterial = new MeshBasicMaterial({ color: 0xffe066 });
+const rotateHandles = ROTATE_HANDLE_OFFSETS.map(() => {
+  const handle = new Mesh(rotateHandleGeometry, rotateHandleMaterial);
+  handle.visible = false;
+  scene.add(handle);
+  return handle;
+});
 
 function updateSelectionVisuals(instance: ObstacleInstance): void {
   const mesh = meshesById.get(instance.id);
@@ -273,12 +285,12 @@ function updateSelectionVisuals(instance: ObstacleInstance): void {
   selectionRing.scale.setScalar(radius);
 
   const handleDistance = radius + 0.6;
-  rotateHandle.visible = true;
-  rotateHandle.position.set(
-    instance.x + handleDistance * Math.cos(instance.rotation),
-    mesh.position.y + 0.3,
-    instance.z - handleDistance * Math.sin(instance.rotation),
-  );
+  ROTATE_HANDLE_OFFSETS.forEach((offset, i) => {
+    const angle = instance.rotation + offset;
+    const handle = rotateHandles[i];
+    handle.visible = true;
+    handle.position.set(instance.x + handleDistance * Math.cos(angle), mesh.position.y + 0.3, instance.z - handleDistance * Math.sin(angle));
+  });
 }
 
 // --- Per-type control panels ---------------------------------------------
@@ -416,7 +428,7 @@ function selectInstance(id: string | null): void {
     updateSelectionVisuals(instance);
   } else {
     selectionRing.visible = false;
-    rotateHandle.visible = false;
+    rotateHandles.forEach((handle) => (handle.visible = false));
   }
 }
 
@@ -624,16 +636,20 @@ function findInstanceAt(worldX: number, worldZ: number): ObstacleInstance | unde
   });
 }
 
-function isNearHandle(instance: ObstacleInstance, worldX: number, worldZ: number): boolean {
+/** Returns the offset (from ROTATE_HANDLE_OFFSETS) of whichever handle was hit, if any. */
+function findGrabbedHandleOffset(instance: ObstacleInstance, worldX: number, worldZ: number): number | undefined {
   const r = getFootprintRadius(instance) + 0.6;
-  const handleX = instance.x + r * Math.cos(instance.rotation);
-  const handleZ = instance.z - r * Math.sin(instance.rotation);
-  const dx = handleX - worldX;
-  const dz = handleZ - worldZ;
-  return dx * dx + dz * dz <= HANDLE_HIT_RADIUS * HANDLE_HIT_RADIUS;
+  return ROTATE_HANDLE_OFFSETS.find((offset) => {
+    const angle = instance.rotation + offset;
+    const handleX = instance.x + r * Math.cos(angle);
+    const handleZ = instance.z - r * Math.sin(angle);
+    const dx = handleX - worldX;
+    const dz = handleZ - worldZ;
+    return dx * dx + dz * dz <= HANDLE_HIT_RADIUS * HANDLE_HIT_RADIUS;
+  });
 }
 
-type DragMode = { kind: "move" | "rotate"; instanceId: string } | null;
+type DragMode = { kind: "move"; instanceId: string } | { kind: "rotate"; instanceId: string; handleOffset: number } | null;
 let dragMode: DragMode = null;
 
 // Terrain-brush dragging fixes the brush's world (x, z) at wherever the drag
@@ -659,9 +675,12 @@ renderer2d.domElement.addEventListener("pointerdown", (event) => {
   }
 
   const selected = selectedId ? findInstance(selectedId) : undefined;
-  if (selected && isNearHandle(selected, x, z)) {
-    dragMode = { kind: "rotate", instanceId: selected.id };
-    return;
+  if (selected) {
+    const handleOffset = findGrabbedHandleOffset(selected, x, z);
+    if (handleOffset !== undefined) {
+      dragMode = { kind: "rotate", instanceId: selected.id, handleOffset };
+      return;
+    }
   }
 
   const hit = findInstanceAt(x, z);
@@ -704,7 +723,8 @@ renderer2d.domElement.addEventListener("pointermove", (event) => {
     instance.x = x;
     instance.z = z;
   } else {
-    instance.rotation = Math.atan2(-(z - instance.z), x - instance.x);
+    const grabbedAngle = Math.atan2(-(z - instance.z), x - instance.x);
+    instance.rotation = grabbedAngle - dragMode.handleOffset;
   }
 
   repositionMesh(instance);
