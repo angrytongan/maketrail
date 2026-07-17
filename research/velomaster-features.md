@@ -11,11 +11,13 @@ Jump, Stairs, Hairpin, Small U-Turn, Seesaw, Snake, Rails, Camel, Small Hairpin,
 ## Candidates worth adding to our obstacle model
 
 Of the 16, the ones that look like genuine geometric trail features (rather than playground games) and aren't already covered:
-- **Seesaw** — pivoting plank, tips at a threshold weight/position.
-- **Rails / Balance (beam)** — narrow elevated beam, same concept as the "skinny" already logged in [[build-plans]].
+- **Seesaw** — pivoting plank, tips at a threshold weight/position. Now researched in depth, see [[teeter-totter]].
+- **Rails / Balance (beam)** — narrow elevated beam, same concept as the "skinny" already logged in [[build-plans]]. Now researched in depth, see [[skinnies]].
 - **Camel** — sounds like a double/triple roller hump (needs the product page to confirm — name isn't self-explanatory).
 - **Sleeping Policeman** — literal speed bump, i.e. a single small roller.
 - **Corner / Small U-Turn / Hairpin / Sweeper** — turn variants, likely just [[berms]] at different radii/angles rather than new obstacle types.
+
+Also researched, not from this catalog but requested alongside the other two: **Drop** — see [[drops]].
 
 ## Material notes (real-world build, low priority for the simulator)
 

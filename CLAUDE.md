@@ -8,6 +8,10 @@ Default terrain: 20m x 20m x 0 elevation grid, vertex spacing 0.5m, grid size co
 
 [docs/decisions.md](docs/decisions.md) — scope/architecture decisions (persistence, trail marking, obstacle editing, difficulty rating, undo, future build-export). Check this before assuming how something should work.
 
+## Feature backlog
+
+[docs/features.md](docs/features.md) — not-yet-built features and known gaps. Check here for what's next; once an item is built, remove it from there and describe it in the Status section below instead.
+
 ## Research
 
 Read only the file(s) relevant to the current task — don't load all of them if you're focused on one concept.
@@ -20,6 +24,9 @@ Read only the file(s) relevant to the current task — don't load all of them if
 - [research/sources-to-review.md](research/sources-to-review.md) — IMBA PDFs found but not yet read; download + OCR later
 - [research/build-plans.md](research/build-plans.md) — Lunch Ride MTB physical build blueprints (kicker, skinny, manual machine); not yet read
 - [research/velomaster-features.md](research/velomaster-features.md) — Velosolutions Velomaster obstacle catalog; candidates for new obstacle types (skinny/rail, seesaw)
+- [research/teeter-totter.md](research/teeter-totter.md) — pivoting-plank mechanism, dimensions, approach angle; only obstacle whose ridden geometry changes dynamically
+- [research/drops.md](research/drops.md) — lip/fall-height/landing model, IMBA difficulty-band drop heights
+- [research/skinnies.md](research/skinnies.md) — narrow balance beam, width (skill) vs. height (risk) as independent params
 
 ## Stack
 
@@ -45,10 +52,10 @@ All three obstacles follow the same convention: geometry centered on its own loc
 
 **Terrain vertex editing** (`src/terrain/brush.ts`, wired up in `main.ts`) is a brush, not one-vertex-at-a-time — dragging every point individually would be tedious. `getPointsInBrush` finds every terrain point within an adjustable radius of the cursor with a cosine falloff (full effect at center, tapering to zero at the edge, so strokes don't leave a flat plateau with a hard edge). An `editMode: "obstacles" | "terrain"` toggle (buttons in the "Editor" card header) switches the 2D view's click/drag behavior between the two — they'd otherwise be ambiguous. In Terrain mode: small marker dots (a single `THREE.Points` with per-vertex colors) appear over all mock survey points, highlighting yellow when under the brush (even on hover, before dragging) — 2D-view-only (same `layers` mechanism as the camera helper below), since they're a 2D editing aid and would just clutter the 3D view.
 
-Within Terrain mode, a `terrainTool: "sculpt" | "smooth"` toggle picks the brush behavior: **Raise/Lower** applies an incremental height delta from vertical mouse movement since the *previous* move event, with the brush's world position locked at drag-start (moving the mouse vertically maps to world Z in this top-down view, so the brush can't also follow the cursor without fighting height control). **Smooth** pulls each affected point toward the brush area's own weighted-average height each stroke (a Laplacian-style blur using the brush region as its own neighborhood, `SMOOTH_STRENGTH` per event) — it has no such conflict, so it *does* follow the live cursor while dragging, letting you sweep it across an area. Known gap: obstacles don't auto-resample elevation when nearby terrain changes — only the next time that obstacle itself is moved.
+Within Terrain mode, a `terrainTool: "sculpt" | "smooth"` toggle picks the brush behavior: **Raise/Lower** applies an incremental height delta from vertical mouse movement since the *previous* move event, with the brush's world position locked at drag-start (moving the mouse vertically maps to world Z in this top-down view, so the brush can't also follow the cursor without fighting height control). **Smooth** pulls each affected point toward the brush area's own weighted-average height each stroke (a Laplacian-style blur using the brush region as its own neighborhood, `SMOOTH_STRENGTH` per event) — it has no such conflict, so it *does* follow the live cursor while dragging, letting you sweep it across an area.
 
 UI is split into cards (`index.html`), laid out as a 2-column CSS grid (`grid-template-areas`): the "2D Plan View" card and a single "Editor" card (mode toggle, then either the obstacles add/remove toolbar + selected instance panel, or the terrain brush-size toolbar, depending on mode) are stacked in the left column; the "3D View" card fills the whole right column, spanning both rows so it's taller than either left-column card individually. Both views render the *same* Three.js `scene` — 3D uses `PerspectiveCamera` + `OrbitControls`, 2D uses a static top-down `OrthographicCamera` (no pan/zoom yet) and is the interactive surface for both obstacle and terrain editing. The 2D view also shows a `CameraHelper` for the 3D camera (its position + frustum), so orbiting/zooming the 3D view is visible from above; kept 2D-only via Three.js `layers` (helper on layer 1, only `camera2d` has it enabled) rather than cluttering the 3D view with its own frustum. The helper is built from a proxy camera cloned from `camera3d` with a short `far` (8m, vs. the real camera's 1000) — synced to `camera3d`'s position/rotation every frame in `animate()` — so the frustum shows position/direction without drawing all the way to the real (and much longer) render distance. Trail marking isn't built yet — separate future feature per docs/decisions.md.
 
 **Undo / redo** (`src/history/stack.ts` — generic, pure, tested; wired up in `main.ts`): an in-session snapshot stack, per docs/decisions.md. Each snapshot is `{ instances, heights }` (obstacle instances + terrain vertex heights); camera/view state is deliberately never snapshotted, so orbiting/panning is never undoable. Covers obstacle add/remove (`performAtomicAction`), obstacle move/rotate drags and terrain sculpt/smooth brush strokes (`beginHistoryGesture`/`commitHistoryGesture`, snapshotting once at gesture start and committing once at gesture end so a whole drag is one undo step, not one per pointermove tick), and obstacle parameter sliders (snapshotted on the first `input` of a hold, committed on `change`). No-op gestures (e.g. a click without movement) are detected via a `JSON.stringify` before/after comparison and never pushed. Triggered by Undo/Redo buttons in the Editor card header and Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z (or Ctrl+Y) keyboard shortcuts.
 
-No real heightmap import, no trail marking, no landing ramp for the kicker yet — next step is likely one of those (see docs/decisions.md).
+See [docs/features.md](docs/features.md) for what's not built yet.
